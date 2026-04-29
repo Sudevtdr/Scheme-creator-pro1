@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scheme Creator PRO</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* Replicate Streamlit st.data_editor Grid styling */
+        .table-container {
+            max-height: 600px;
+            overflow-y: auto;
+            overflow-x: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-top: 15px;
+            background: white;
+        }
+        .data-grid {
+            width: max-content;
+            min-width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+        .data-grid th {
+            position: sticky;
+            top: 0;
+            background: #f8fafc;
+            color: #334155;
+            z-index: 10;
+            padding: 10px 12px;
+            border: 1px solid #e2e8f0;
+            text-align: left;
+            font-weight: 600;
+        }
+        .data-grid td {
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            color: #1e293b;
+        }
+        .data-grid tr:hover td {
+            background: #f1f5f9;
+        }
+        .data-grid td[contenteditable="true"] {
+            cursor: text;
+        }
+        .data-grid td[contenteditable="true"]:focus {
+            outline: 2px solid #3b82f6;
+            background: #eff6ff;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="custom-header">
+            <h1>🛡️ Scheme Creator PRO</h1>
+            <p>TACTICAL DEPLOYMENT MANAGEMENT SYSTEM</p>
+        </div>
+
+        <!-- Settings & Project Management -->
+        <div class="settings-panel control-panel" style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+            <div class="proj-mgmt" style="flex: 1; min-width: 300px;">
+                <h4>💾 Project Management</h4>
+                <p style="font-size: 0.85em; color: #64748b; margin-top: 0;">Save your entire workflow (Scheme, Nominal Roll & Settings)</p>
+                <button id="save-proj-btn" class="stButton" style="background-color: #1d4ed8; color: white; border: none;">💾 Save Project (.scproj)</button>
+                <div style="margin-top: 10px;">
+                    <label style="font-weight: 600;">📂 Load Project: <input type="file" id="load-proj-input" accept=".scproj"></label>
+                </div>
+            </div>
+            <div class="global-settings" style="flex: 2; min-width: 400px;">
+                <h4>⚙️ Global Settings</h4>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <label><strong>Theme (Export):</strong>
+                        <select id="theme-select" style="padding: 4px; border-radius: 4px; border: 1px solid #ccc;">
+                            <option value="Default Blue">Default Blue</option>
+                            <option value="Night Mode">Night Mode</option>
+                            <option value="Desert Sand">Desert Sand</option>
+                            <option value="Oceanic">Oceanic</option>
+                            <option value="High Contrast">High Contrast</option>
+                            <option value="Forest Green">Forest Green</option>
+                            <option value="Sunset Orange">Sunset Orange</option>
+                            <option value="Royal Purple">Royal Purple</option>
+                            <option value="Crimson Red">Crimson Red</option>
+                            <option value="Steel Slate">Steel Slate</option>
+                            <option value="Cyberpunk Neon">Cyberpunk Neon</option>
+                        </select>
+                    </label>
+                </div>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                    <label>Zone Cmdr: <input type="text" id="cmd-z" value="SP" size="6" style="padding: 4px;"></label>
+                    <label>Div Cmdr: <input type="text" id="cmd-d" value="DySP" size="6" style="padding: 4px;"></label>
+                    <label>Sec Cmdr: <input type="text" id="cmd-s" value="IP" size="6" style="padding: 4px;"></label>
+                    <label>Force 1: <input type="text" id="f-1" value="SI/ASI" size="8" style="padding: 4px;"></label>
+                    <label>Force 2: <input type="text" id="f-2" value="SCPO/CPO" size="8" style="padding: 4px;"></label>
+                    <label>Force 3: <input type="text" id="f-3" value="WSCPO/WCPO" size="10" style="padding: 4px;"></label>
+                    <button id="save-settings-btn" class="stButton" style="padding: 4px 10px;">Save Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tab-nav">
+            <button class="tab-link active" onclick="openTab(event, 'tab1')">📝 1. Scheme Builder</button>
+            <button class="tab-link" onclick="openTab(event, 'tab2')">📊 2. Manpower Totals</button>
+            <button class="tab-link" onclick="openTab(event, 'tab3')">🖨️ 3. Readable Scheme</button>
+            <button class="tab-link" onclick="openTab(event, 'tab4')">📋 4. Nominal Roll</button>
+            <button class="tab-link" onclick="openTab(event, 'tab5')">🎯 5. Manual Assign</button>
+            <button class="tab-link" onclick="openTab(event, 'tab6')">✅ 6. Deployed Sheet</button>
+            <button class="tab-link" onclick="openTab(event, 'tab7')">🗓️ 7. Matrix Sheet</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div id="tab1" class="tab-content" style="display: block;">
+            <h3>📝 Scheme Builder</h3>
+            <div class="control-panel">
+                <h4>🛠️ Scheme Builder Control Panel</h4>
+                <div style="margin-bottom: 10px;">
+                    <label>Load Scheme (Excel): <input type="file" id="upload-scheme-input" accept=".xlsx"></label>
+                </div>
+                <button id="align-scheme-btn" class="stButton">🔄 Auto-Align Scheme</button>
+                <button id="sort-scheme-btn" class="stButton">↕️ Sort by Zone/Div</button>
+                <button id="add-blank-rows-btn" class="stButton">➕ Add 10 Blank Rows</button>
+                <button id="audit-scheme-btn" class="stButton">🚨 Audit Scheme</button>
+                <button id="undo-scheme-btn" class="stButton">↩️ Undo</button>
+                <button id="redo-scheme-btn" class="stButton">↪️ Redo</button>
+                <button id="dl-raw-btn" class="stButton" style="background-color: #e0f2fe; border-color: #bae6fd;">📥 Download Raw Scheme</button>
+                <hr>
+                <h4>Row Actions (Check boxes first!)</h4>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <select id="clone-level-select" style="padding: 6px; border-radius: 4px; border: 1px solid #ccc;">
+                        <option value="Point">Clone Point</option>
+                        <option value="Sector">Clone Sector</option>
+                        <option value="Division">Clone Division</option>
+                        <option value="Zone">Clone Zone</option>
+                    </select>
+                    <input type="text" id="clone-labels-input" value="Day, Night" style="padding: 6px; border-radius: 4px; border: 1px solid #ccc; width: 180px;" placeholder="e.g. Day, Night">
+                    <button id="clone-selected-btn" class="stButton">👯 Clone Selected</button>
+                </div>
+                <button id="group-zone-btn" class="stButton">🏢 Group to Zone</button>
+                <button id="group-div-btn" class="stButton">🛡️ Group to Div</button>
+                <button id="group-sec-btn" class="stButton">🎯 Group to Sec</button>
+                <button id="duplicate-selected-btn" class="stButton">📑 Duplicate Rows</button>
+                <button id="fill-down-btn" class="stButton">⬇️ Fill Down</button>
+            </div>
+            <div id="scheme-editor-container">
+                <!-- The data grid will be rendered here by JavaScript -->
+                <p>Loading scheme data...</p>
+            </div>
+        </div>
+
+        <div id="tab2" class="tab-content">
+            <h3>📊 Manpower Totals</h3>
+            <div class="control-panel">
+                <button id="get-totals-btn" class="stButton">📈 Generate Manpower Report</button>
+                <button id="dl-totals-btn" class="stButton" style="background-color: #e0f2fe; border-color: #bae6fd;">📥 Download Totals</button>
+            </div>
+            <div id="manpower-totals-container">
+                <!-- Manpower totals table will be rendered here -->
+            </div>
+        </div>
+
+        <div id="tab3" class="tab-content">
+            <h3>🖨️ 3. Readable Scheme</h3>
+            <div class="control-panel">
+                <button id="get-readable-btn" class="stButton">📄 Generate Readable Scheme</button>
+                <span style="margin-left: 15px; border-left: 1px solid #ccc; padding-left: 15px;">
+                    <strong>📤 Advanced Export:</strong>
+                    <button id="dl-readable-xls" class="stButton" style="background-color: #dcfce7; border-color: #bbf7d0;">📥 Styled Excel</button>
+                    <button id="dl-readable-pdf" class="stButton" style="background-color: #fee2e2; border-color: #fecaca;">📥 HTML/PDF</button>
+                </span>
+            </div>
+            <div id="readable-scheme-container"></div>
+        </div>
+
+        <div id="tab4" class="tab-content">
+            <h3>📋 4. Nominal Roll</h3>
+            <div class="control-panel">
+                <button id="t4-undo-btn" class="stButton">↩️ Undo Action</button>
+                <button id="t4-redo-btn" class="stButton">↪️ Redo Action</button>
+                <span style="margin: 0 10px; border-left: 1px solid #ccc;"></span>
+                <label>Upload Nominal Roll (Excel): <input type="file" id="upload-nom-input" accept=".xlsx"></label>
+                <button id="clean-ranks-btn" class="stButton">✨ Clean & Find Ranks</button>
+                <button id="find-dupes-btn" class="stButton">🔍 Find Duplicates</button>
+                <span style="margin: 0 10px; border-left: 1px solid #ccc;"></span>
+                <button id="dl-nom-template-btn" class="stButton" style="background-color: #f3f4f6;">📄 Blank Template</button>
+                <button id="dl-nom-roll-btn" class="stButton" style="background-color: #e0f2fe; border-color: #bae6fd;">📥 Download Nominal Roll</button>
+            </div>
+            <div id="nom-tally-dashboard" style="display: flex; gap: 10px; margin-bottom: 15px;"></div>
+            <div id="nom-editor-container"></div>
+        </div>
+
+        <div id="tab5" class="tab-content">
+            <h3>🎯 5. Manual Assign & Auto-Allocation</h3>
+            <div class="control-panel">
+                <h4>⚡ Bulk Actions</h4>
+                <button id="auto-allocate-btn" class="stButton">⚡ Auto-Allocate (Strict)</button>
+                <button id="qrt-sweep-btn" class="stButton">🚨 QRT Sweep (Reserve)</button>
+                <button id="reset-auto-btn" class="stButton">🔄 Reset Auto (Keep Manual)</button>
+                <button id="reset-all-btn" class="stButton">🔄 Reset All</button>
+            </div>
+            <div id="manual-assign-container" class="table-container">
+                <!-- The manual assignment data grid will be rendered here by JavaScript -->
+                <p>Loading manual assignment data...</p>
+            </div>
+        </div>
+
+        <div id="tab6" class="tab-content">
+            <h3>✅ 6. Deployed Sheet</h3>
+            <div class="control-panel">
+                <button id="get-deployed-btn" class="stButton">🚀 Generate Deployment & Matrix</button>
+                <span style="margin-left: 15px; border-left: 1px solid #ccc; padding-left: 15px;">
+                    <strong>📤 Advanced Export:</strong>
+                    <button id="dl-dep-xls-full" class="stButton" style="background-color: #dcfce7; border-color: #bbf7d0;">📥 Excel (Full)</button>
+                    <button id="dl-dep-xls-zone" class="stButton" style="background-color: #dcfce7; border-color: #bbf7d0;">📥 Excel (Zones)</button>
+                    <button id="dl-dep-html" class="stButton" style="background-color: #fee2e2; border-color: #fecaca;">📥 HTML Report</button>
+                </span>
+            </div>
+            <div id="deployed-sheet-container"></div>
+        </div>
+
+        <div id="tab7" class="tab-content">
+            <h3>🗓️ 7. Matrix Sheet</h3>
+            <p>Generated automatically alongside the Deployed Sheet.</p>
+            <div class="control-panel">
+                <strong>📤 Advanced Export:</strong>
+                <button id="dl-mat-xls-full" class="stButton" style="background-color: #dcfce7; border-color: #bbf7d0;">📥 Excel (Full Matrix)</button>
+                <button id="dl-mat-xls-zone" class="stButton" style="background-color: #dcfce7; border-color: #bbf7d0;">📥 Excel (Zones)</button>
+                <button id="dl-mat-html" class="stButton" style="background-color: #fee2e2; border-color: #fecaca;">📥 HTML Report</button>
+            </div>
+            <div id="matrix-sheet-container"></div>
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        🛡️ Designed by District SB Pathanamthitta | Ver 1.0 (Web Edition)
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
