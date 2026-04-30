@@ -116,6 +116,8 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
             elif "🌟 GRAND SCHEME" in val0: tags.append('grand_total_row')
             elif "∑ TOTAL" in val0 and "ZONE" in val0: tags.append('zone_total_row')
             elif "∑ TOTAL" in val0: tags.append('sec_total_row')
+            elif "📜 SCHEME:" in val0: tags.append('main_heading_row')
+            elif "📅 DATE:" in val0: tags.append('date_heading_row')
             else: tags.append('point_row')
 
             fill_color, font_color, is_bold = None, "000000", False
@@ -125,6 +127,8 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
             elif 'grand_total_row' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['gt']), to_hex(get_contrasting_text(theme_colors['gt'])), True
             elif 'zone_total_row' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['zt']), to_hex(get_contrasting_text(theme_colors['zt'])), True
             elif 'sec_total_row' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['st']), to_hex(get_contrasting_text(theme_colors['st'])), True
+            elif 'main_heading_row' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['z']), to_hex(theme_colors['zf']), True
+            elif 'date_heading_row' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['d']), to_hex(theme_colors['df']), True
             elif 'point_header' in tags:
                 fill_color, font_color, is_bold = to_hex(theme_colors['st']), to_hex(get_contrasting_text(theme_colors['st'])), True
                 ws.cell(row=current_row, column=1).font = Font(color=font_color, bold=True, underline="single")
@@ -144,6 +148,13 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
 
             if ('zone_header' in tags or 'div_header' in tags or 'sec_header' in tags) and source_tab in ["preview", "deployed"]:
                 ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=len(columns))
+            
+            if 'main_heading_row' in tags or 'date_heading_row' in tags:
+                ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=len(columns))
+                ws.cell(row=current_row, column=1).alignment = Alignment(horizontal='center', vertical='center')
+                if 'main_heading_row' in tags: ws.cell(row=current_row, column=1).font = Font(color=font_color, bold=is_bold, size=14)
+                if 'date_heading_row' in tags: ws.cell(row=current_row, column=1).font = Font(color=font_color, bold=is_bold, size=12)
+                
             if source_tab == "matrix":
                 for i in range(1, len(columns) + 1): ws.cell(row=current_row, column=i).alignment = Alignment(wrap_text=True, vertical='center')
 
@@ -156,7 +167,7 @@ def generate_html_report(df, title, source_tab, theme_colors):
     st_bg, st_fg = theme_colors['st'], get_contrasting_text(theme_colors['st'])
     
     html = f"<html><head><meta charset='utf-8'><title>{title}</title>"
-    html += f"<style>body {{ font-family: 'Segoe UI', sans-serif; margin: 20px; font-size: 12px; background-color: {p_bg}; color: {p_fg}; }} table {{ width: 100%; border-collapse: collapse; }} th, td {{ border: 1px solid #dddddd; padding: 6px; text-align: left; vertical-align: top; }} th {{ background-color: #f2f2f2; color: #000; }} .zone_header {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; }} .div_header {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; }} .sec_header {{ background-color: {s_bg} !important; color: {s_fg} !important; font-weight: bold; }} .point_header {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; text-decoration: underline; }} .person_row {{ background-color: {p_bg} !important; color: {p_fg} !important; }} @media print {{ tr td {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }} }}</style></head><body><h2>{title}</h2><table><thead><tr>"
+    html += f"<style>body {{ font-family: 'Segoe UI', sans-serif; margin: 20px; font-size: 12px; background-color: {p_bg}; color: {p_fg}; }} table {{ width: 100%; border-collapse: collapse; }} th, td {{ border: 1px solid #dddddd; padding: 6px; text-align: left; vertical-align: top; }} th {{ background-color: #f2f2f2; color: #000; }} .zone_header {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; }} .div_header {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; }} .sec_header {{ background-color: {s_bg} !important; color: {s_fg} !important; font-weight: bold; }} .point_header {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; text-decoration: underline; }} .person_row {{ background-color: {p_bg} !important; color: {p_fg} !important; }} .main_heading_row {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; font-size: 16px; text-align: center; }} .date_heading_row {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; font-size: 14px; text-align: center; }} @media print {{ tr td {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }} }}</style></head><body><h2>{title}</h2><table><thead><tr>"
     columns = df.columns.tolist()
     for col in columns: html += f"<th>{col}</th>"
     html += "</tr></thead><tbody>"
@@ -172,8 +183,11 @@ def generate_html_report(df, title, source_tab, theme_colors):
         elif "🌟 GRAND SCHEME" in val0: r_class = 'grand_total_row'
         elif "∑ TOTAL" in val0 and "ZONE" in val0: r_class = 'zone_total_row'
         elif "∑ TOTAL" in val0: r_class = 'sec_total_row'
+        elif "📜 SCHEME" in val0: r_class = 'main_heading_row'
+        elif "📅 DATE" in val0: r_class = 'date_heading_row'
         else: r_class = 'point_row'
         if r_class in ['zone_header', 'div_header', 'sec_header'] and source_tab in ['preview', 'deployed']: html += f"<tr class='{r_class}'><td colspan='{len(columns)}'>{str(vals[0])}</td></tr>"
+        elif r_class in ['main_heading_row', 'date_heading_row']: html += f"<tr class='{r_class}'><td colspan='{len(columns)}' style='text-align: center;'>{str(vals[0])}</td></tr>"
         else:
             html += f"<tr class='{r_class}'>"
             for val in vals: html += f"<td>{str(val).replace(chr(10), '<br>')}</td>"
@@ -295,11 +309,14 @@ def get_aggregated_hierarchy(df):
                     hierarchy[z_key]['divs'][d]['secs'][s]['points'].append((p, si, cpo, wcpo))
     return hierarchy
 
-def build_readable_scheme_df(hierarchy, cmd_names, force_names):
+def build_readable_scheme_df(hierarchy, cmd_names, force_names, heading="", date=""):
     hier_data = []
     grand_si = grand_cpo = grand_wcpo = 0
     total_sp = total_dysp = total_ip = 0
     
+    if heading: hier_data.append([f"📜 SCHEME: {heading.upper()}"] + [""] * len(force_names))
+    if date: hier_data.append([f"📅 DATE: {date}"] + [""] * len(force_names))
+
     def build_oic_str(fallbacks):
         for val, name in fallbacks:
             if val and str(val) != "0": return f"({name.upper()}): {val}"
@@ -392,7 +409,7 @@ def get_scheme_requirements(df, cmd_names, force_names):
             if ip: add_req(loc_z, cmd_names[2], ip)
     return reqs
 
-def build_deployed_data(scheme_df, nom_df, cmd_names, force_names):
+def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", date=""):
     assignments = {}
     rank_prio = {force_names[0]: 1, force_names[1]: 2, force_names[2]: 3, cmd_names[0]: 0, cmd_names[1]: 0, cmd_names[2]: 0}
     
@@ -405,7 +422,7 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names):
             if duty not in assignments: assignments[duty] = []
             assignments[duty].append({
                 'name': str(row.get('Name', '')).strip().upper(),
-                'rank': (str(row.get('Preferred Rank', '')).strip() or str(row.get('Rank (Raw)', '')).strip()).upper(),
+                'rank': (str(row.get('Rank (Raw)', '')).strip() or str(row.get('Preferred Rank', '')).strip()).upper(),
                 'gl': str(row.get('GL Number', '')).replace('.0',''),
                 'pen': str(row.get('PEN', '')).replace('.0',''),
                 'unit': str(row.get('Unit', '')).upper(),
@@ -451,6 +468,9 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names):
     dep_data = []
     matrix_data = []
     
+    if heading: dep_data.append([f"📜 SCHEME: {heading.upper()}", "", "", "", "", ""]); matrix_data.append([f"📜 SCHEME: {heading.upper()}"] + [""] * (len(matrix_cols)-1))
+    if date: dep_data.append([f"📅 DATE: {date}", "", "", "", "", ""]); matrix_data.append([f"📅 DATE: {date}"] + [""] * (len(matrix_cols)-1))
+
     hierarchy = get_aggregated_hierarchy(scheme_df)
     matrix_struct = {}
 
@@ -687,8 +707,8 @@ def clean_ranks():
         if raw in ["IP", "IOP", "ISHO", "CI", "INSPECTOR", "API", "RI", "DI"]: pref = cmd_names[2]
         elif raw in ["DYSP", "AC", "DSP", "ASP", "DC", "ADSP"]: pref = cmd_names[1]
         elif raw in ["SP"]: pref = cmd_names[0]
-        elif raw in ["SI", "DSI", "ASI", "JRSI", "GSI", "WSI", "APSI", "APASI", "RSI", "RASI", "GRASI", "GRSI", "GASI", "SI(G)", "ASI(G)"]: pref = force_names[0]
-        elif raw in ["PC", "GSCPO", "CPO", "SCPO(G)", "HAV", "HDR", "HC","RTPC", "PCTELE", "SCPO"]: pref = force_names[1]
+        elif raw in ["SI", "DSI", "ASI", "JRSI", "GSI", "WSI", "APSI", "APASI", "RSI", "RASI", "GRASI", "GRSI", "GASI", "SI(G)", "ASI(G)", "SGT"]: pref = force_names[0]
+        elif raw in ["PC", "GSCPO", "CPO", "SCPO(G)", "HAV", "HDR", "HC","RTPC", "PCTELE", "SCPO", "HG"]: pref = force_names[1]
         elif "W" in raw: pref = force_names[2]
         if pref: df.at[idx, 'Preferred Rank'] = pref
     return jsonify(df.to_dict('records'))
@@ -817,13 +837,13 @@ def manpower_totals():
 def readable_scheme():
     data = request.json
     hierarchy = get_aggregated_hierarchy(pd.DataFrame(data['scheme_data']))
-    readable_df = build_readable_scheme_df(hierarchy, data['cmd_names'], data['force_names'])
+    readable_df = build_readable_scheme_df(hierarchy, data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     return jsonify(readable_df.to_dict('records'))
 
 @app.route('/api/deployed-data', methods=['POST'])
 def deployed_data():
     data = request.json
-    dep_df, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'])
+    dep_df, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     return jsonify({"deployed": dep_df.to_dict('records'), "matrix": mat_df.to_dict('records')})
 
 
@@ -844,14 +864,14 @@ def download_totals():
 @app.route('/api/download/readable-excel', methods=['POST'])
 def download_readable_excel():
     data = request.json
-    readable_df = build_readable_scheme_df(get_aggregated_hierarchy(pd.DataFrame(data['scheme_data'])), data['cmd_names'], data['force_names'])
+    readable_df = build_readable_scheme_df(get_aggregated_hierarchy(pd.DataFrame(data['scheme_data'])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     excel_data = generate_styled_excel(readable_df, "preview", themes[data.get('theme', 'Default Blue')], "full")
     return send_file(io.BytesIO(excel_data), download_name="Readable_Scheme.xlsx", as_attachment=True)
 
 @app.route('/api/download/readable-html', methods=['POST'])
 def download_readable_html():
     data = request.json
-    readable_df = build_readable_scheme_df(get_aggregated_hierarchy(pd.DataFrame(data['scheme_data'])), data['cmd_names'], data['force_names'])
+    readable_df = build_readable_scheme_df(get_aggregated_hierarchy(pd.DataFrame(data['scheme_data'])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     html_data = generate_html_report(readable_df, "Readable Scheme", "preview", themes[data.get('theme', 'Default Blue')])
     return send_file(io.BytesIO(html_data), download_name="Readable_Scheme.html", as_attachment=True)
 
@@ -869,7 +889,7 @@ def download_nom_roll():
 @app.route('/api/download/deployed-excel', methods=['POST'])
 def download_deployed_excel():
     data = request.json
-    dep_df, _ = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'])
+    dep_df, _ = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     excel_data = generate_styled_excel(dep_df, "deployed", themes[data.get('theme', 'Default Blue')], data.get('mode', 'full'))
     name = "Deployed_Zones.xlsx" if data.get('mode') == 'zone_sheets' else "Deployed_Sheet.xlsx"
     return send_file(io.BytesIO(excel_data), download_name=name, as_attachment=True)
@@ -877,14 +897,14 @@ def download_deployed_excel():
 @app.route('/api/download/deployed-html', methods=['POST'])
 def download_deployed_html():
     data = request.json
-    dep_df, _ = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'])
+    dep_df, _ = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     html_data = generate_html_report(dep_df, "Deployed Scheme", "deployed", themes[data.get('theme', 'Default Blue')])
     return send_file(io.BytesIO(html_data), download_name="Deployed_Report.html", as_attachment=True)
 
 @app.route('/api/download/matrix-excel', methods=['POST'])
 def download_matrix_excel():
     data = request.json
-    _, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'])
+    _, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     excel_data = generate_styled_excel(mat_df, "matrix", themes[data.get('theme', 'Default Blue')], data.get('mode', 'full'))
     name = "Matrix_Zones.xlsx" if data.get('mode') == 'zone_sheets' else "Matrix_Sheet.xlsx"
     return send_file(io.BytesIO(excel_data), download_name=name, as_attachment=True)
@@ -892,7 +912,7 @@ def download_matrix_excel():
 @app.route('/api/download/matrix-html', methods=['POST'])
 def download_matrix_html():
     data = request.json
-    _, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'])
+    _, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     html_data = generate_html_report(mat_df, "Matrix Matrix", "matrix", themes[data.get('theme', 'Default Blue')])
     return send_file(io.BytesIO(html_data), download_name="Matrix_Report.html", as_attachment=True)
 
