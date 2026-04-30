@@ -12,6 +12,8 @@ const appState = {
     nom_undo: [],
     nom_redo: [],
     colWidths: {},
+    scheme_heading: "",
+    scheme_date: ""
 };
 
 function getSchemeHeaders() {
@@ -329,7 +331,7 @@ async function getReadableScheme() {
         const response = await fetch('/api/readable-scheme', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ scheme_data: appState.scheme_data, cmd_names: appState.cmd_names, force_names: appState.force_names })
+            body: JSON.stringify({ scheme_data: appState.scheme_data, cmd_names: appState.cmd_names, force_names: appState.force_names, heading: appState.scheme_heading, date: appState.scheme_date })
         });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         renderGenericTable(await response.json(), 'readable-scheme-container');
@@ -341,7 +343,7 @@ async function getDeployedData() {
         const response = await fetch('/api/deployed-data', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names })
+            body: JSON.stringify({ scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, heading: appState.scheme_heading, date: appState.scheme_date })
         });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         
@@ -455,20 +457,70 @@ function renderNominalTable(containerId) {
         container.innerHTML = "<p>No nominal roll data loaded. Please upload an Excel file.</p>";
         return;
     }
+
+    let savedScrollTop = 0;
+    const tableContainer = container.querySelector('.table-container');
+    if (tableContainer) savedScrollTop = tableContainer.scrollTop;
+    const windowScrollY = window.scrollY;
+
     const headers = ["Sl No", "Name", "Rank (Raw)", "GL Number", "PEN", "Unit", "Mobile", "Remarks", "Preferred Rank", "Duty Allocation"];
     let table = '<div class="table-container"><table class="data-grid"><thead><tr>';
+    const allRanks = [...appState.cmd_names, ...appState.force_names];
+
     headers.forEach(h => table += `<th>${h}</th>`);
     table += '</tr></thead><tbody>';
     appState.nom_data.forEach((row, index) => {
         table += '<tr>';
         headers.forEach(header => {
-            table += `<td contenteditable="true" data-row="${index}" data-col="${header}">${row[header] || ''}</td>`;
+            if (header === 'Preferred Rank') {
+                const currentRank = row['Preferred Rank'] || '';
+                const isValidRank = allRanks.includes(currentRank);
+                const style = (!isValidRank && currentRank) ? 'style="background-color: #fee2e2; color: #b91c1c; font-weight: bold;"' : '';
+
+                table += `<td><select class="nom-rank-select" data-row="${index}" ${style}>`;
+                table += `<option value="">-- Select Rank --</option>`;
+                allRanks.forEach(r => {
+                    const selected = (r === currentRank) ? 'selected' : '';
+                    table += `<option value="${r}" ${selected}>${r}</option>`;
+                });
+                if (!isValidRank && currentRank) {
+                    table += `<option value="${currentRank}" selected disabled>${currentRank} (Unmapped)</option>`;
+                }
+                table += `</select></td>`;
+            } else {
+                table += `<td contenteditable="true" data-row="${index}" data-col="${header}">${row[header] || ''}</td>`;
+            }
         });
         table += '</tr>';
     });
     table += '</tbody></table></div>';
     container.innerHTML = table;
     makeTableResizable(container.querySelector('table'));
+    
+    const newTableContainer = container.querySelector('.table-container');
+    if (newTableContainer) newTableContainer.scrollTop = savedScrollTop;
+    window.scrollTo(0, windowScrollY);
+
+    container.querySelectorAll('.nom-rank-select').forEach(select => {
+        select.addEventListener('change', function() {
+            const rowIndex = this.getAttribute('data-row');
+            const newVal = this.value;
+            if (appState.nom_data[rowIndex]['Preferred Rank'] !== newVal) {
+                saveNomState();
+                appState.nom_data[rowIndex]['Preferred Rank'] = newVal;
+                appState.nom_data[rowIndex]['Duty Allocation'] = "";
+                appState.nom_data[rowIndex]['Assignment Type'] = "";
+                
+                // Visually update the cell without re-rendering the whole table
+                const dutyCell = container.querySelector(`td[data-row="${rowIndex}"][data-col="Duty Allocation"]`);
+                if (dutyCell) dutyCell.innerText = "";
+                this.removeAttribute('style'); // Clear red error background if any
+                
+                renderManualAssignment();
+                updateTallyDashboard();
+            }
+        });
+    });
 
     container.querySelectorAll('td[contenteditable="true"]').forEach(cell => {
         cell.addEventListener('blur', function() {
@@ -478,12 +530,6 @@ function renderNominalTable(containerId) {
             if (appState.nom_data[rowIndex][colName] !== newVal) {
                 saveNomState();
                 appState.nom_data[rowIndex][colName] = newVal;
-                if (colName === 'Preferred Rank') {
-                    appState.nom_data[rowIndex]['Duty Allocation'] = "";
-                    appState.nom_data[rowIndex]['Assignment Type'] = "";
-                    const daCell = document.querySelector(`#nom-editor-container td[data-row="${rowIndex}"][data-col="Duty Allocation"]`);
-                    if (daCell) daCell.innerText = "";
-                }
                 if (colName === 'Duty Allocation' && newVal !== "") {
                     appState.nom_data[rowIndex]['Assignment Type'] = "Manual";
                 }
@@ -491,6 +537,7 @@ function renderNominalTable(containerId) {
         });
     });
 }
+
 
 function renderManualAssignment() {
     const container = document.getElementById('manual-assign-container');
@@ -929,6 +976,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeState();
     renderSchemeTable();
 
+    bindIfExists('scheme-heading-input', 'input', e => appState.scheme_heading = e.target.value);
+    bindIfExists('scheme-date-input', 'input', e => appState.scheme_date = e.target.value);
+
     // DOM Bindings
     bindIfExists('align-scheme-btn', 'click', alignScheme);
     bindIfExists('get-totals-btn', 'click', getManpowerTotals);
@@ -995,6 +1045,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 appState.nom_redo = loaded.nom_redo || [];
                 appState.colWidths = loaded.colWidths || {};
                 appState.ma_filters = loaded.ma_filters || null;
+                appState.scheme_heading = loaded.scheme_heading || "";
+                appState.scheme_date = loaded.scheme_date || "";
+
+                const hInput = document.getElementById('scheme-heading-input'); if (hInput) hInput.value = appState.scheme_heading;
+                const dInput = document.getElementById('scheme-date-input'); if (dInput) dInput.value = appState.scheme_date;
 
                 document.getElementById('theme-select').value = appState.theme || "Default Blue";
                 document.getElementById('cmd-z').value = appState.cmd_names[0]; document.getElementById('cmd-d').value = appState.cmd_names[1]; document.getElementById('cmd-s').value = appState.cmd_names[2];
@@ -1019,19 +1074,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- DOWNLOAD BINDINGS ---
     bindIfExists('dl-raw-btn', 'click', () => downloadBlob('/api/download/raw-scheme', {scheme_data: appState.scheme_data}, 'Raw_Scheme.xlsx'));
     bindIfExists('dl-totals-btn', 'click', () => downloadBlob('/api/download/totals', {scheme_data: appState.scheme_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme}, 'Manpower_Totals.xlsx'));
-    bindIfExists('dl-readable-xls', 'click', () => downloadBlob('/api/download/readable-excel', {scheme_data: appState.scheme_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme}, 'Readable_Scheme.xlsx'));
-    bindIfExists('dl-readable-pdf', 'click', () => downloadBlob('/api/download/readable-html', {scheme_data: appState.scheme_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme}, 'Readable_Scheme.html'));
+    bindIfExists('dl-readable-xls', 'click', () => downloadBlob('/api/download/readable-excel', {scheme_data: appState.scheme_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, heading: appState.scheme_heading, date: appState.scheme_date}, 'Readable_Scheme.xlsx'));
+    bindIfExists('dl-readable-pdf', 'click', () => downloadBlob('/api/download/readable-html', {scheme_data: appState.scheme_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, heading: appState.scheme_heading, date: appState.scheme_date}, 'Readable_Scheme.html'));
     
     bindIfExists('t4-undo-btn', 'click', undoNom);
     bindIfExists('t4-redo-btn', 'click', redoNom);
     bindIfExists('dl-nom-template-btn', 'click', () => downloadBlob('/api/download/nom-template', {}, 'Blank_Roster_Template.xlsx'));
     bindIfExists('dl-nom-roll-btn', 'click', () => downloadBlob('/api/download/nom-roll', {nom_data: appState.nom_data}, 'Nominal_Roll.xlsx'));
 
-    bindIfExists('dl-dep-xls-full', 'click', () => downloadBlob('/api/download/deployed-excel', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, mode: 'full'}, 'Deployed_Sheet.xlsx'));
-    bindIfExists('dl-dep-xls-zone', 'click', () => downloadBlob('/api/download/deployed-excel', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, mode: 'zone_sheets'}, 'Deployed_Zones.xlsx'));
-    bindIfExists('dl-dep-html', 'click', () => downloadBlob('/api/download/deployed-html', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme}, 'Deployed_Report.html'));
+    bindIfExists('dl-dep-xls-full', 'click', () => downloadBlob('/api/download/deployed-excel', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, mode: 'full', heading: appState.scheme_heading, date: appState.scheme_date}, 'Deployed_Sheet.xlsx'));
+    bindIfExists('dl-dep-xls-zone', 'click', () => downloadBlob('/api/download/deployed-excel', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, mode: 'zone_sheets', heading: appState.scheme_heading, date: appState.scheme_date}, 'Deployed_Zones.xlsx'));
+    bindIfExists('dl-dep-html', 'click', () => downloadBlob('/api/download/deployed-html', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, heading: appState.scheme_heading, date: appState.scheme_date}, 'Deployed_Report.html'));
 
-    bindIfExists('dl-mat-xls-full', 'click', () => downloadBlob('/api/download/matrix-excel', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, mode: 'full'}, 'Matrix_Sheet.xlsx'));
-    bindIfExists('dl-mat-xls-zone', 'click', () => downloadBlob('/api/download/matrix-excel', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, mode: 'zone_sheets'}, 'Matrix_Zones.xlsx'));
-    bindIfExists('dl-mat-html', 'click', () => downloadBlob('/api/download/matrix-html', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme}, 'Matrix_Report.html'));
+    bindIfExists('dl-mat-xls-full', 'click', () => downloadBlob('/api/download/matrix-excel', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, mode: 'full', heading: appState.scheme_heading, date: appState.scheme_date}, 'Matrix_Sheet.xlsx'));
+    bindIfExists('dl-mat-xls-zone', 'click', () => downloadBlob('/api/download/matrix-excel', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, mode: 'zone_sheets', heading: appState.scheme_heading, date: appState.scheme_date}, 'Matrix_Zones.xlsx'));
+    bindIfExists('dl-mat-html', 'click', () => downloadBlob('/api/download/matrix-html', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, heading: appState.scheme_heading, date: appState.scheme_date}, 'Matrix_Report.html'));
 });
