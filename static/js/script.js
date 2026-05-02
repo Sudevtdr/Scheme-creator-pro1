@@ -923,6 +923,9 @@ async function uploadNominalExcel(fileInput) {
     if (!fileInput.files.length) return;
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
+    if (appState.nom_data && appState.nom_data.length > 0) {
+        formData.append('existing_data', JSON.stringify(appState.nom_data));
+    }
     saveNomState();
     try {
         const response = await fetch('/api/upload-nominal', { method: 'POST', body: formData });
