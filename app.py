@@ -1,5 +1,6 @@
 import io
 import re
+import json
 import pandas as pd
 from flask import Flask, request, jsonify, render_template, send_file
 from openpyxl import Workbook
@@ -363,6 +364,13 @@ def build_readable_scheme_df(hierarchy, cmd_names, force_names, heading="", date
     if hierarchy:
         grand_txt = f"🌟 GRAND SCHEME TOTAL (CMDRS: {cmd_names[0].upper()}:{total_sp} | {cmd_names[1].upper()}:{total_dysp} | {cmd_names[2].upper()}:{total_ip})"
         hier_data.append([grand_txt, str(grand_si), str(grand_cpo), str(grand_wcpo)])
+
+    # Post-process to hide empty commander rows as requested
+    empty_indicator = f"OFFICER IN CHARGE ({force_names[0].upper()}): 0"
+    for i in range(len(hier_data)):
+        if empty_indicator in str(hier_data[i][0]):
+            hier_data[i] = [""] * len(hier_data[i])
+
     return pd.DataFrame(hier_data, columns=["HIERARCHY / LOCATION"] + force_names)
 
 def get_scheme_requirements(df, cmd_names, force_names):
@@ -553,6 +561,16 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", d
                 for bp, p_data in s_data['points'].items():
                     insert_matrix_block(f"    {pt_counter}. 📍 {bp.upper()}", p_data)
                     pt_counter += 1
+
+    # Post-process to hide empty commander rows in deployment and matrix sheets
+    empty_indicator_dep = f"OFFICER IN CHARGE ({force_names[0].upper()}): (NOT ASSIGNED)"
+    for i in range(len(dep_data)):
+        if empty_indicator_dep in str(dep_data[i][0]):
+            dep_data[i] = [""] * len(dep_data[i])
+            
+    for i in range(len(matrix_data)):
+        if "OFFICER IN CHARGE" in str(matrix_data[i][0]) and len(matrix_data[i]) > 1 and "(NONE)" in str(matrix_data[i][1]):
+            matrix_data[i] = [""] * len(matrix_data[i])
             
     return pd.DataFrame(dep_data, columns=["HIERARCHY / LOCATION / NAME", "RANK", "GL NUMBER", "PEN", "UNIT", "MOBILE"]), pd.DataFrame(matrix_data, columns=matrix_cols)
 
@@ -641,14 +659,14 @@ def align_with_select(data, df):
 @app.route('/api/align-scheme', methods=['POST'])
 def align_scheme():
     data = request.json
-    df = pd.DataFrame(data['scheme_data'])
+    df = pd.DataFrame(data['scheme_data']).fillna("")
     aligned_df = align_with_select(data, df)
     return jsonify(aligned_df.to_dict('records'))
 
 @app.route('/api/sort-scheme', methods=['POST'])
 def sort_scheme():
     data = request.json
-    df = pd.DataFrame(data['scheme_data'])
+    df = pd.DataFrame(data['scheme_data']).fillna("")
     df['sort_key_z'] = df.get('Zone', '').apply(lambda x: natural_key(str(x)))
     df['sort_key_d'] = df.get('Division', '').apply(lambda x: natural_key(str(x)))
     df = df.sort_values(by=['sort_key_z', 'sort_key_d']).drop(columns=['sort_key_z', 'sort_key_d']).reset_index(drop=True)
@@ -691,13 +709,20 @@ def upload_nominal():
         mask = df.astype(str).apply(lambda s: s.str.strip()).ne("").any(axis=1)
         df = df[mask].astype(str)
         if 'Assignment Type' not in df.columns: df['Assignment Type'] = ""
+        
+        existing_data_str = request.form.get('existing_data', '[]')
+        if existing_data_str and existing_data_str.strip() != '[]':
+            existing_df = pd.DataFrame(json.loads(existing_data_str)).fillna("")
+            if not existing_df.empty:
+                df = pd.concat([existing_df, df], ignore_index=True).fillna("")
+                
         return jsonify(df.to_dict('records'))
     except Exception as e: return jsonify({'error': str(e)}), 400
 
 @app.route('/api/clean-ranks', methods=['POST'])
 def clean_ranks():
     data = request.json
-    df = pd.DataFrame(data['nom_data'])
+    df = pd.DataFrame(data['nom_data']).fillna("")
     cmd_names = data.get('cmd_names', ["SP", "DySP", "IP"])
     force_names = data.get('force_names', ["SI/ASI", "SCPO/CPO", "WSCPO/WCPO"])
     if 'Preferred Rank' not in df.columns: df['Preferred Rank'] = ""
@@ -716,8 +741,8 @@ def clean_ranks():
 @app.route('/api/auto-allocate', methods=['POST'])
 def auto_allocate():
     data = request.json
-    nom_df = pd.DataFrame(data['nom_data'])
-    scheme_df = pd.DataFrame(data['scheme_data'])
+    nom_df = pd.DataFrame(data['nom_data']).fillna("")
+    scheme_df = pd.DataFrame(data['scheme_data']).fillna("")
     cmd_names = data.get('cmd_names', ["SP", "DySP", "IP"])
     force_names = data.get('force_names', ["SI/ASI", "SCPO/CPO", "WSCPO/WCPO"])
     if 'Duty Allocation' not in nom_df.columns: nom_df['Duty Allocation'] = ""
@@ -739,16 +764,30 @@ def auto_allocate():
 
 @app.route('/api/qrt-sweep', methods=['POST'])
 def qrt_sweep():
-    nom_df = pd.DataFrame(request.json['nom_data'])
+    nom_df = pd.DataFrame(request.json['nom_data']).fillna("")
     if 'Duty Allocation' not in nom_df.columns: nom_df['Duty Allocation'] = ""
+    if 'Assignment Type' not in nom_df.columns: nom_df['Assignment Type'] = ""
     for idx, row in nom_df.iterrows():
-        if str(row.get('Preferred Rank', '')).strip() and not str(row.get('Duty Allocation', '')).strip(): nom_df.at[idx, 'Duty Allocation'] = "Standby / Reserve"
+        if str(row.get('Preferred Rank', '')).strip() and not str(row.get('Duty Allocation', '')).strip():
+            nom_df.at[idx, 'Duty Allocation'] = "Standby / Reserve"
+            nom_df.at[idx, 'Assignment Type'] = "Auto"
+    return jsonify(nom_df.to_dict('records'))
+
+@app.route('/api/reset-auto', methods=['POST'])
+def reset_auto():
+    nom_df = pd.DataFrame(request.json['nom_data']).fillna("")
+    if 'Duty Allocation' not in nom_df.columns: nom_df['Duty Allocation'] = ""
+    if 'Assignment Type' not in nom_df.columns: nom_df['Assignment Type'] = ""
+    for idx, row in nom_df.iterrows():
+        if str(row.get('Assignment Type', '')).strip() == "Auto":
+            nom_df.at[idx, 'Duty Allocation'] = ""
+            nom_df.at[idx, 'Assignment Type'] = ""
     return jsonify(nom_df.to_dict('records'))
 
 @app.route('/api/clone-rows', methods=['POST'])
 def clone_rows():
     data = request.json
-    df = pd.DataFrame(data['scheme_data'])
+    df = pd.DataFrame(data['scheme_data']).fillna("")
     selected_indices = data.get('selected_indices', [])
     level = data.get('level', 'Point')
     labels = data.get('labels', ['Day', 'Night'])
@@ -777,7 +816,7 @@ def clone_rows():
 @app.route('/api/group-rows', methods=['POST'])
 def group_rows():
     data = request.json
-    df = pd.DataFrame(data['scheme_data'])
+    df = pd.DataFrame(data['scheme_data']).fillna("")
     selected_indices = data.get('selected_indices', [])
     level = data.get('level')
     name = data.get('name', '')
@@ -799,7 +838,7 @@ def group_rows():
 @app.route('/api/duplicate-rows', methods=['POST'])
 def duplicate_rows():
     data = request.json
-    df = pd.DataFrame(data['scheme_data'])
+    df = pd.DataFrame(data['scheme_data']).fillna("")
     selected_indices = data.get('selected_indices', [])
     copies = int(data.get('copies', 1))
     if not selected_indices: return jsonify(align_with_select(data, df).to_dict('records'))
@@ -815,7 +854,7 @@ def duplicate_rows():
 @app.route('/api/fill-down', methods=['POST'])
 def fill_down():
     data = request.json
-    df = pd.DataFrame(data['scheme_data'])
+    df = pd.DataFrame(data['scheme_data']).fillna("")
     selected_indices = data.get('selected_indices', [])
     cols_to_fill = data.get('columns', [])
     if not selected_indices or not cols_to_fill: return jsonify(align_with_select(data, df).to_dict('records'))
@@ -830,20 +869,20 @@ def fill_down():
 @app.route('/api/manpower-totals', methods=['POST'])
 def manpower_totals():
     data = request.json
-    totals_df = get_manpower_totals_df(pd.DataFrame(data['scheme_data']), data['cmd_names'], data['force_names'])
+    totals_df = get_manpower_totals_df(pd.DataFrame(data['scheme_data']).fillna(""), data['cmd_names'], data['force_names'])
     return jsonify(totals_df.to_dict('records'))
 
 @app.route('/api/readable-scheme', methods=['POST'])
 def readable_scheme():
     data = request.json
-    hierarchy = get_aggregated_hierarchy(pd.DataFrame(data['scheme_data']))
+    hierarchy = get_aggregated_hierarchy(pd.DataFrame(data['scheme_data']).fillna(""))
     readable_df = build_readable_scheme_df(hierarchy, data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     return jsonify(readable_df.to_dict('records'))
 
 @app.route('/api/deployed-data', methods=['POST'])
 def deployed_data():
     data = request.json
-    dep_df, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
+    dep_df, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     return jsonify({"deployed": dep_df.to_dict('records'), "matrix": mat_df.to_dict('records')})
 
 
@@ -851,27 +890,27 @@ def deployed_data():
 
 @app.route('/api/download/raw-scheme', methods=['POST'])
 def download_raw_scheme():
-    df = pd.DataFrame(request.json['scheme_data']).drop(columns=["Select"], errors="ignore")
+    df = pd.DataFrame(request.json['scheme_data']).fillna("").drop(columns=["Select"], errors="ignore")
     return send_file(io.BytesIO(to_excel(df)), download_name="Raw_Scheme.xlsx", as_attachment=True)
 
 @app.route('/api/download/totals', methods=['POST'])
 def download_totals():
     data = request.json
-    totals_df = get_manpower_totals_df(pd.DataFrame(data['scheme_data']), data['cmd_names'], data['force_names'])
+    totals_df = get_manpower_totals_df(pd.DataFrame(data['scheme_data']).fillna(""), data['cmd_names'], data['force_names'])
     excel_data = generate_styled_excel(totals_df, "totals", themes[data.get('theme', 'Default Blue')], "full")
     return send_file(io.BytesIO(excel_data), download_name="Manpower_Totals.xlsx", as_attachment=True)
 
 @app.route('/api/download/readable-excel', methods=['POST'])
 def download_readable_excel():
     data = request.json
-    readable_df = build_readable_scheme_df(get_aggregated_hierarchy(pd.DataFrame(data['scheme_data'])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
+    readable_df = build_readable_scheme_df(get_aggregated_hierarchy(pd.DataFrame(data['scheme_data']).fillna("")), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     excel_data = generate_styled_excel(readable_df, "preview", themes[data.get('theme', 'Default Blue')], "full")
     return send_file(io.BytesIO(excel_data), download_name="Readable_Scheme.xlsx", as_attachment=True)
 
 @app.route('/api/download/readable-html', methods=['POST'])
 def download_readable_html():
     data = request.json
-    readable_df = build_readable_scheme_df(get_aggregated_hierarchy(pd.DataFrame(data['scheme_data'])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
+    readable_df = build_readable_scheme_df(get_aggregated_hierarchy(pd.DataFrame(data['scheme_data']).fillna("")), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     html_data = generate_html_report(readable_df, "Readable Scheme", "preview", themes[data.get('theme', 'Default Blue')])
     return send_file(io.BytesIO(html_data), download_name="Readable_Scheme.html", as_attachment=True)
 
@@ -882,14 +921,14 @@ def download_nom_template():
 
 @app.route('/api/download/nom-roll', methods=['POST'])
 def download_nom_roll():
-    df = pd.DataFrame(request.json['nom_data']).drop(columns=["Assignment Type"], errors="ignore")
+    df = pd.DataFrame(request.json['nom_data']).fillna("").drop(columns=["Assignment Type"], errors="ignore")
     mask = df.astype(str).apply(lambda s: s.str.strip()).ne("").any(axis=1)
     return send_file(io.BytesIO(to_excel(df[mask])), download_name="Nominal_Roll.xlsx", as_attachment=True)
 
 @app.route('/api/download/deployed-excel', methods=['POST'])
 def download_deployed_excel():
     data = request.json
-    dep_df, _ = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
+    dep_df, _ = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     excel_data = generate_styled_excel(dep_df, "deployed", themes[data.get('theme', 'Default Blue')], data.get('mode', 'full'))
     name = "Deployed_Zones.xlsx" if data.get('mode') == 'zone_sheets' else "Deployed_Sheet.xlsx"
     return send_file(io.BytesIO(excel_data), download_name=name, as_attachment=True)
@@ -897,14 +936,14 @@ def download_deployed_excel():
 @app.route('/api/download/deployed-html', methods=['POST'])
 def download_deployed_html():
     data = request.json
-    dep_df, _ = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
+    dep_df, _ = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     html_data = generate_html_report(dep_df, "Deployed Scheme", "deployed", themes[data.get('theme', 'Default Blue')])
     return send_file(io.BytesIO(html_data), download_name="Deployed_Report.html", as_attachment=True)
 
 @app.route('/api/download/matrix-excel', methods=['POST'])
 def download_matrix_excel():
     data = request.json
-    _, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
+    _, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     excel_data = generate_styled_excel(mat_df, "matrix", themes[data.get('theme', 'Default Blue')], data.get('mode', 'full'))
     name = "Matrix_Zones.xlsx" if data.get('mode') == 'zone_sheets' else "Matrix_Sheet.xlsx"
     return send_file(io.BytesIO(excel_data), download_name=name, as_attachment=True)
@@ -912,7 +951,7 @@ def download_matrix_excel():
 @app.route('/api/download/matrix-html', methods=['POST'])
 def download_matrix_html():
     data = request.json
-    _, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']), pd.DataFrame(data.get('nom_data', [])), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
+    _, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
     html_data = generate_html_report(mat_df, "Matrix Matrix", "matrix", themes[data.get('theme', 'Default Blue')])
     return send_file(io.BytesIO(html_data), download_name="Matrix_Report.html", as_attachment=True)
 
