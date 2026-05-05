@@ -6,9 +6,10 @@ body {
 }
 
 .container {
-    max-width: 1400px;
+    max-width: 100%;
+    box-sizing: border-box;
     margin: 0 auto;
-    padding: 20px;
+    padding: 20px 30px; /* Adjusted padding slightly for edge breathing room */
 }
 
 /* Custom Header Banner (from Streamlit) */
