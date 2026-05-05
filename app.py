@@ -112,8 +112,12 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
             elif "🛡️ DIV:" in val0: tags.append('div_header')
             elif "🎯 SEC:" in val0: tags.append('sec_header')
             elif "▼ DUTY POINTS" in val0: tags.append('point_header')
-            elif "📍" in val0: tags.append('point_row')
-            elif "👤" in val0: tags.append('person_row')
+            elif "📍" in val0:
+                if len(vals) > 1 and str(vals[1]).strip() == "RANK":
+                    tags.append('deployed_point_header')
+                else:
+                    tags.append('point_row')
+            elif "" in val0: tags.append('person_row')
             elif "🌟 GRAND SCHEME" in val0: tags.append('grand_total_row')
             elif "∑ TOTAL" in val0 and "ZONE" in val0: tags.append('zone_total_row')
             elif "∑ TOTAL" in val0: tags.append('sec_total_row')
@@ -136,6 +140,8 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
                 for c in range(2, len(columns)+1): ws.cell(row=current_row, column=c).font = Font(color=font_color, bold=True)
                 for i in range(1, len(columns) + 1): ws.cell(row=current_row, column=i).fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
                 continue
+            elif 'deployed_point_header' in tags:
+                fill_color, font_color, is_bold = to_hex(theme_colors['st']), to_hex(get_contrasting_text(theme_colors['st'])), True
             elif 'person_row' in tags or 'point_row' in tags:
                 fill_color, font_color, is_bold = to_hex(theme_colors['p']), to_hex(get_contrasting_text(theme_colors['p'])), False
 
@@ -168,7 +174,7 @@ def generate_html_report(df, title, source_tab, theme_colors):
     st_bg, st_fg = theme_colors['st'], get_contrasting_text(theme_colors['st'])
     
     html = f"<html><head><meta charset='utf-8'><title>{title}</title>"
-    html += f"<style>body {{ font-family: 'Segoe UI', sans-serif; margin: 20px; font-size: 12px; background-color: {p_bg}; color: {p_fg}; }} table {{ width: 100%; border-collapse: collapse; }} th, td {{ border: 1px solid #dddddd; padding: 6px; text-align: left; vertical-align: top; }} th {{ background-color: #f2f2f2; color: #000; }} .zone_header {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; }} .div_header {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; }} .sec_header {{ background-color: {s_bg} !important; color: {s_fg} !important; font-weight: bold; }} .point_header {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; text-decoration: underline; }} .person_row {{ background-color: {p_bg} !important; color: {p_fg} !important; }} .main_heading_row {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; font-size: 16px; text-align: center; }} .date_heading_row {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; font-size: 14px; text-align: center; }} @media print {{ tr td {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }} }}</style></head><body><h2>{title}</h2><table><thead><tr>"
+    html += f"<style>body {{ font-family: 'Segoe UI', sans-serif; margin: 20px; font-size: 12px; background-color: {p_bg}; color: {p_fg}; }} table {{ width: 100%; border-collapse: collapse; }} th, td {{ border: 1px solid #dddddd; padding: 6px; text-align: left; vertical-align: top; }} th {{ background-color: #f2f2f2; color: #000; }} .zone_header {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; }} .div_header {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; }} .sec_header {{ background-color: {s_bg} !important; color: {s_fg} !important; font-weight: bold; }} .point_header {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; text-decoration: underline; }} .deployed_point_header {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; }} .person_row {{ background-color: {p_bg} !important; color: {p_fg} !important; }} .main_heading_row {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; font-size: 16px; text-align: center; }} .date_heading_row {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; font-size: 14px; text-align: center; }} @media print {{ tr td {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }} }}</style></head><body><h2>{title}</h2><table><thead><tr>"
     columns = df.columns.tolist()
     for col in columns: html += f"<th>{col}</th>"
     html += "</tr></thead><tbody>"
@@ -179,7 +185,11 @@ def generate_html_report(df, title, source_tab, theme_colors):
         elif "🛡️ DIV" in val0: r_class = 'div_header'
         elif "🎯 SEC" in val0: r_class = 'sec_header'
         elif "▼ DUTY POINTS" in val0: r_class = 'point_header'
-        elif "📍" in val0: r_class = 'point_row'
+        elif "📍" in val0:
+            if len(vals) > 1 and str(vals[1]).strip() == "RANK":
+                r_class = 'deployed_point_header'
+            else:
+                r_class = 'point_row'
         elif "👤" in val0: r_class = 'person_row'
         elif "🌟 GRAND SCHEME" in val0: r_class = 'grand_total_row'
         elif "∑ TOTAL" in val0 and "ZONE" in val0: r_class = 'zone_total_row'
@@ -221,6 +231,18 @@ def get_compressed_person(p):
     if p['unit']: parts.append(p['unit'])
     if p['mob']: parts.append(f"MOB-{p['mob']}")
     return ", ".join(parts)
+
+def int_to_roman(num):
+    val = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
+    syb = ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"]
+    roman_num = ''
+    i = 0
+    while num > 0:
+        for _ in range(num // val[i]):
+            roman_num += syb[i]
+            num -= val[i]
+        i += 1
+    return roman_num
 
 def to_excel(df):
     output = io.BytesIO()
@@ -519,13 +541,15 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", d
                     bp, tp = parse_turn(p_name)
                     if bp not in matrix_struct[bz]['divs'][bd]['secs'][bs]['points']: matrix_struct[bz]['divs'][bd]['secs'][bs]['points'][bp] = {}
                     
-                    dep_data.append([f"    {point_counter}. 📍 {p_name}", "RANK", "GL NUMBER", "PEN", "UNIT", "MOBILE"])
+                    dep_data.append([f"    {int_to_roman(point_counter)}. 📍 {p_name}", "RANK", "GL NUMBER", "PEN", "UNIT", "MOBILE"])
                     
                     p_str = build_loc_str(z, d, s, pt[0]) if z != "UNZONED" else build_loc_str(d, s, pt[0])
                     if p_str in assignments:
                         matrix_struct[bz]['divs'][bd]['secs'][bs]['points'][bp][tp] = assignments[p_str]
+                        person_counter = 1
                         for person in assignments[p_str]:
-                            dep_data.append([f"          👤 {person['name']}", person['rank'], person['gl'], person['pen'], person['unit'], person['mob']])
+                            dep_data.append([f"          {person_counter}. 👤 {person['name']}", person['rank'], person['gl'], person['pen'], person['unit'], person['mob']])
+                            person_counter += 1
                     else:
                         dep_data.append([f"          ⚠️ (NO PERSONNEL ASSIGNED YET)", "", "", "", "", ""])
                     point_counter += 1
@@ -534,8 +558,10 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", d
         res_assigned = assignments["Standby / Reserve"]
         dep_data.append(["", "", "", "", "", ""])
         dep_data.append(["🚨 STANDBY / RESERVE FORCE", "RANK", "GL", "PEN", "UNIT", "MOBILE"])
+        person_counter = 1
         for person in res_assigned:
-            dep_data.append([f"          👤 {person['name']}", person['rank'], person['gl'], person['pen'], person['unit'], person['mob']])
+            dep_data.append([f"          {person_counter}. 👤 {person['name']}", person['rank'], person['gl'], person['pen'], person['unit'], person['mob']])
+            person_counter += 1
 
     def insert_matrix_block(name_prefix, data_dict):
         if not data_dict:
@@ -559,7 +585,7 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", d
                 insert_matrix_block(f"🎯 SEC: {bs.upper()} | OFFICER IN CHARGE", s_data['cmdrs'])
                 pt_counter = 1
                 for bp, p_data in s_data['points'].items():
-                    insert_matrix_block(f"    {pt_counter}. 📍 {bp.upper()}", p_data)
+                    insert_matrix_block(f"    {int_to_roman(pt_counter)}. 📍 {bp.upper()}", p_data)
                     pt_counter += 1
 
     # Post-process to hide empty commander rows in deployment and matrix sheets
