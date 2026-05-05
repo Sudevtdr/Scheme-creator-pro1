@@ -13,7 +13,8 @@ const appState = {
     nom_redo: [],
     colWidths: {},
     scheme_heading: "",
-    scheme_date: ""
+    scheme_date: "",
+    nom_filters: {}
 };
 
 function getSchemeHeaders() {
@@ -57,7 +58,8 @@ async function downloadBlob(endpoint, payload, filename) {
 
 function makeTableResizable(table) {
     if (!table) return;
-    const cols = table.querySelectorAll('thead th');
+    // Only target the top header row, ignore filter input rows
+    const cols = table.querySelectorAll('thead tr:first-child th');
     cols.forEach(col => {
         // Restore previously adjusted width for this column name
         const colName = col.innerText.trim();
@@ -331,7 +333,7 @@ async function getReadableScheme() {
         const response = await fetch('/api/readable-scheme', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ scheme_data: appState.scheme_data, cmd_names: appState.cmd_names, force_names: appState.force_names, heading: appState.scheme_heading, date: appState.scheme_date })
+            body: JSON.stringify({ scheme_data: appState.scheme_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, heading: appState.scheme_heading, date: appState.scheme_date })
         });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         renderGenericTable(await response.json(), 'readable-scheme-container');
@@ -343,7 +345,7 @@ async function getDeployedData() {
         const response = await fetch('/api/deployed-data', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, heading: appState.scheme_heading, date: appState.scheme_date })
+            body: JSON.stringify({ scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, heading: appState.scheme_heading, date: appState.scheme_date })
         });
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         
@@ -463,13 +465,38 @@ function renderNominalTable(containerId) {
     if (tableContainer) savedScrollTop = tableContainer.scrollTop;
     const windowScrollY = window.scrollY;
 
+    let activeFilterCol = null;
+    let selectionStart = null;
+    if (document.activeElement && document.activeElement.classList.contains('nom-filter-input')) {
+        activeFilterCol = document.activeElement.getAttribute('data-col');
+        try { selectionStart = document.activeElement.selectionStart; } catch(e) {}
+    }
+
+    if (!appState.nom_filters) appState.nom_filters = {};
+
     const headers = ["Sl No", "Name", "Rank (Raw)", "GL Number", "PEN", "Unit", "Mobile", "Remarks", "Preferred Rank", "Duty Allocation"];
     let table = '<div class="table-container"><table class="data-grid"><thead><tr>';
     const allRanks = [...appState.cmd_names, ...appState.force_names];
 
     headers.forEach(h => table += `<th>${h}</th>`);
+    table += '</tr><tr class="filter-row">';
+    
+    headers.forEach(h => {
+        const val = appState.nom_filters[h] || '';
+        table += `<th style="padding: 4px; background: #f1f5f9;"><input type="text" class="nom-filter-input" data-col="${h}" value="${val}" placeholder="Filter..." style="width: 100%; box-sizing: border-box; font-size: 0.85em; padding: 4px; border: 1px solid #cbd5e1; border-radius: 4px; font-weight: normal;"></th>`;
+    });
+    
     table += '</tr></thead><tbody>';
-    appState.nom_data.forEach((row, index) => {
+
+    let filteredData = appState.nom_data.map((row, idx) => ({ row, idx }));
+    Object.keys(appState.nom_filters).forEach(col => {
+        const term = appState.nom_filters[col].toLowerCase();
+        if (term) {
+            filteredData = filteredData.filter(item => (item.row[col] || "").toLowerCase().includes(term));
+        }
+    });
+
+    filteredData.forEach(({ row, idx: index }) => {
         table += '<tr>';
         headers.forEach(header => {
             if (header === 'Preferred Rank') {
@@ -500,6 +527,21 @@ function renderNominalTable(containerId) {
     const newTableContainer = container.querySelector('.table-container');
     if (newTableContainer) newTableContainer.scrollTop = savedScrollTop;
     window.scrollTo(0, windowScrollY);
+
+    if (activeFilterCol) {
+        const el = container.querySelector(`.nom-filter-input[data-col="${activeFilterCol}"]`);
+        if (el) {
+            el.focus();
+            try { el.setSelectionRange(selectionStart, selectionStart); } catch(e) {}
+        }
+    }
+
+    container.querySelectorAll('.nom-filter-input').forEach(inp => {
+        inp.addEventListener('input', function() {
+            appState.nom_filters[this.getAttribute('data-col')] = this.value;
+            renderNominalTable(containerId);
+        });
+    });
 
     container.querySelectorAll('.nom-rank-select').forEach(select => {
         select.addEventListener('change', function() {
@@ -559,7 +601,8 @@ function renderManualAssignment() {
         try { selectionStart = document.activeElement.selectionStart; } catch(e) {}
     }
 
-    if (!appState.ma_filters) appState.ma_filters = { z: 'All', d: 'All', s: 'All', unit: 'All', name: '', rank: appState.cmd_names[0], hideDeployed: false };
+    if (!appState.ma_filters) appState.ma_filters = { z: 'All', d: 'All', s: 'All', p: 'All', unit: 'All', name: '', rank: appState.cmd_names[0], hideDeployed: false };
+    if (appState.ma_filters.p === undefined) appState.ma_filters.p = 'All';
 
     const reqs = {};
     const dutyToHier = {};
@@ -589,12 +632,12 @@ function renderManualAssignment() {
             reqs[dutyStr][rank] = (reqs[dutyStr][rank] || 0) + count;
         }
 
-        if (z && !seen_z.has(z)) { if (sp) addReq(loc_z, appState.cmd_names[0], sp); seen_z.add(z); dutyToHier[loc_z] = {z, d:'', s:''}; }
-        if (d && !seen_d.has(z_key + d)) { if (dysp) addReq(loc_d, appState.cmd_names[1], dysp); seen_d.add(z_key + d); dutyToHier[loc_d] = {z, d, s:''}; }
-        if (s && !seen_s.has(z_key + d + s)) { if (ip) addReq(loc_s, appState.cmd_names[2], ip); seen_s.add(z_key + d + s); dutyToHier[loc_s] = {z, d, s}; }
+        if (z && !seen_z.has(z)) { if (sp) addReq(loc_z, appState.cmd_names[0], sp); seen_z.add(z); dutyToHier[loc_z] = {z, d:'', s:'', p:''}; }
+        if (d && !seen_d.has(z_key + d)) { if (dysp) addReq(loc_d, appState.cmd_names[1], dysp); seen_d.add(z_key + d); dutyToHier[loc_d] = {z, d, s:'', p:''}; }
+        if (s && !seen_s.has(z_key + d + s)) { if (ip) addReq(loc_s, appState.cmd_names[2], ip); seen_s.add(z_key + d + s); dutyToHier[loc_s] = {z, d, s, p:''}; }
         
         if (p) { 
-            addReq(loc_p, appState.force_names[0], f1); addReq(loc_p, appState.force_names[1], f2); addReq(loc_p, appState.force_names[2], f3); dutyToHier[loc_p] = {z, d, s}; 
+            addReq(loc_p, appState.force_names[0], f1); addReq(loc_p, appState.force_names[1], f2); addReq(loc_p, appState.force_names[2], f3); dutyToHier[loc_p] = {z, d, s, p}; 
         } else if (s) {
             addReq(loc_s, appState.force_names[0], f1); addReq(loc_s, appState.force_names[1], f2); addReq(loc_s, appState.force_names[2], f3);
         } else if (d) {
@@ -607,13 +650,15 @@ function renderManualAssignment() {
         }
     });
 
-    const uniqueZones = new Set(); const uniqueDivs = new Set(); const uniqueSecs = new Set();
+    const uniqueZones = new Set(); const uniqueDivs = new Set(); const uniqueSecs = new Set(); const uniquePoints = new Set();
     Object.values(dutyToHier).forEach(h => {
         if (h.z) uniqueZones.add(h.z);
         const matchZ = appState.ma_filters.z === 'All' || h.z === appState.ma_filters.z;
         const matchD = appState.ma_filters.d === 'All' || h.d === appState.ma_filters.d;
+        const matchS = appState.ma_filters.s === 'All' || h.s === appState.ma_filters.s;
         if (h.d && matchZ) uniqueDivs.add(h.d);
         if (h.s && matchZ && matchD) uniqueSecs.add(h.s);
+        if (h.p && matchZ && matchD && matchS) uniquePoints.add(h.p);
     });
 
     const allRanks = [...appState.cmd_names, ...appState.force_names];
@@ -621,10 +666,14 @@ function renderManualAssignment() {
     const selectedRank = appState.ma_filters.rank;
 
     const availOptions = [];
+    const unitUnassignedCounts = {}; // Track unassigned counts per unit for the selected rank
     appState.nom_data.forEach((p, idx) => {
         const pRank = (p['Preferred Rank'] || p['Rank (Raw)'] || "").trim();
         const pDuty = (p['Duty Allocation'] || "").trim();
         if (pRank === selectedRank && (!pDuty || pDuty === "Standby / Reserve")) {
+            const u = p.Unit;
+            if (u) unitUnassignedCounts[u] = (unitUnassignedCounts[u] || 0) + 1;
+
             if (appState.ma_filters.unit !== 'All' && p.Unit !== appState.ma_filters.unit) return;
             if (appState.ma_filters.name && !(p.Name || "").toLowerCase().includes(appState.ma_filters.name.toLowerCase())) return;
             const remarksText = (p.Remarks || "").trim() || "nil";
@@ -634,10 +683,11 @@ function renderManualAssignment() {
 
     let html = `
         <div class="ma-filters">
-            <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center; flex-wrap: wrap;">
                 <select id="ma-z-filter" style="padding: 4px;"><option value="All">Filter Zone (All)</option>${[...uniqueZones].sort().map(z => `<option value="${z}" ${appState.ma_filters.z === z ? 'selected' : ''}>${z}</option>`).join('')}</select>
                 <select id="ma-d-filter" style="padding: 4px;"><option value="All">Filter Division (All)</option>${[...uniqueDivs].sort().map(d => `<option value="${d}" ${appState.ma_filters.d === d ? 'selected' : ''}>${d}</option>`).join('')}</select>
                 <select id="ma-s-filter" style="padding: 4px;"><option value="All">Filter Sector (All)</option>${[...uniqueSecs].sort().map(s => `<option value="${s}" ${appState.ma_filters.s === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+                <select id="ma-p-filter" style="padding: 4px;"><option value="All">Filter Point (All)</option>${[...uniquePoints].sort().map(p => `<option value="${p}" ${appState.ma_filters.p === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
                 <button id="ma-reset-filtered-btn" class="stButton" style="padding: 4px 8px;">🔄 Reset Filtered</button>
                 <button id="ma-autofill-btn" class="stButton" style="padding: 4px 8px; background-color: #28a745; color: white; border: none;">⚡ Auto-Fill Filtered</button>
                 <label style="display: flex; align-items: center; margin-left: auto; cursor: pointer; font-weight: 600; color: #ef4444;">
@@ -645,7 +695,7 @@ function renderManualAssignment() {
                 </label>
             </div>
             <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
-                <select id="ma-unit-filter" style="padding: 4px;"><option value="All">Filter Unit (All)</option>${[...new Set(appState.nom_data.map(p => p.Unit).filter(x=>x))].sort().map(u => `<option value="${u}" ${appState.ma_filters.unit === u ? 'selected' : ''}>${u}</option>`).join('')}</select>
+                <select id="ma-unit-filter" style="padding: 4px;"><option value="All">Filter Unit (All)</option>${[...new Set(appState.nom_data.map(p => p.Unit).filter(x=>x))].sort().map(u => `<option value="${u}" ${appState.ma_filters.unit === u ? 'selected' : ''}>${u} (${unitUnassignedCounts[u] || 0} unassigned)</option>`).join('')}</select>
                 <input type="text" id="ma-name-filter" placeholder="Search Personnel Name..." value="${appState.ma_filters.name}" style="padding: 4px; width: 250px;">
                 <span style="margin-left: auto; font-weight: 600; color: #1d4ed8; background: #eff6ff; padding: 6px 12px; border-radius: 12px; border: 1px solid #bfdbfe;">
                     👤 ${availOptions.length} Available (Unassigned)
@@ -667,6 +717,7 @@ function renderManualAssignment() {
         if (appState.ma_filters.z !== 'All' && h.z !== appState.ma_filters.z) return false;
         if (appState.ma_filters.d !== 'All' && h.d !== appState.ma_filters.d) return false;
         if (appState.ma_filters.s !== 'All' && h.s !== appState.ma_filters.s) return false;
+        if (appState.ma_filters.p !== 'All' && h.p !== appState.ma_filters.p) return false;
         return true;
     }
 
@@ -745,9 +796,10 @@ function renderManualAssignment() {
         if (el) { el.focus(); try { el.setSelectionRange(selectionStart, selectionStart); } catch(e) {} }
     }
 
-    container.querySelector('#ma-z-filter').addEventListener('change', e => { appState.ma_filters.z = e.target.value; appState.ma_filters.d = 'All'; appState.ma_filters.s = 'All'; renderManualAssignment(); });
-    container.querySelector('#ma-d-filter').addEventListener('change', e => { appState.ma_filters.d = e.target.value; appState.ma_filters.s = 'All'; renderManualAssignment(); });
-    container.querySelector('#ma-s-filter').addEventListener('change', e => { appState.ma_filters.s = e.target.value; renderManualAssignment(); });
+    container.querySelector('#ma-z-filter').addEventListener('change', e => { appState.ma_filters.z = e.target.value; appState.ma_filters.d = 'All'; appState.ma_filters.s = 'All'; appState.ma_filters.p = 'All'; renderManualAssignment(); });
+    container.querySelector('#ma-d-filter').addEventListener('change', e => { appState.ma_filters.d = e.target.value; appState.ma_filters.s = 'All'; appState.ma_filters.p = 'All'; renderManualAssignment(); });
+    container.querySelector('#ma-s-filter').addEventListener('change', e => { appState.ma_filters.s = e.target.value; appState.ma_filters.p = 'All'; renderManualAssignment(); });
+    container.querySelector('#ma-p-filter').addEventListener('change', e => { appState.ma_filters.p = e.target.value; renderManualAssignment(); });
     container.querySelector('#ma-unit-filter').addEventListener('change', e => { appState.ma_filters.unit = e.target.value; renderManualAssignment(); });
     container.querySelector('#ma-name-filter').addEventListener('input', e => { appState.ma_filters.name = e.target.value; renderManualAssignment(); });
     container.querySelector('#ma-hide-deployed-chk').addEventListener('change', e => { appState.ma_filters.hideDeployed = e.target.checked; renderManualAssignment(); });
@@ -982,6 +1034,11 @@ document.addEventListener('DOMContentLoaded', () => {
     bindIfExists('scheme-heading-input', 'input', e => appState.scheme_heading = e.target.value);
     bindIfExists('scheme-date-input', 'input', e => appState.scheme_date = e.target.value);
 
+    // Update theme state immediately upon selection change without needing to click 'Save Settings'
+    bindIfExists('theme-select', 'change', e => {
+        appState.theme = e.target.value;
+    });
+
     // DOM Bindings
     bindIfExists('align-scheme-btn', 'click', alignScheme);
     bindIfExists('get-totals-btn', 'click', getManpowerTotals);
@@ -1050,6 +1107,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 appState.ma_filters = loaded.ma_filters || null;
                 appState.scheme_heading = loaded.scheme_heading || "";
                 appState.scheme_date = loaded.scheme_date || "";
+                appState.nom_filters = loaded.nom_filters || {};
 
                 const hInput = document.getElementById('scheme-heading-input'); if (hInput) hInput.value = appState.scheme_heading;
                 const dInput = document.getElementById('scheme-date-input'); if (dInput) dInput.value = appState.scheme_date;
@@ -1084,6 +1142,23 @@ document.addEventListener('DOMContentLoaded', () => {
     bindIfExists('t4-redo-btn', 'click', redoNom);
     bindIfExists('dl-nom-template-btn', 'click', () => downloadBlob('/api/download/nom-template', {}, 'Blank_Roster_Template.xlsx'));
     bindIfExists('dl-nom-roll-btn', 'click', () => downloadBlob('/api/download/nom-roll', {nom_data: appState.nom_data}, 'Nominal_Roll.xlsx'));
+    bindIfExists('dl-nom-unassigned-btn', 'click', () => {
+        const unassigned = appState.nom_data.filter(p => {
+            const duty = (p['Duty Allocation'] || "").trim();
+            return !duty || duty === "Standby / Reserve";
+        });
+        if(unassigned.length === 0) return alert("No unassigned personnel found!");
+        downloadBlob('/api/download/nom-roll', {nom_data: unassigned}, 'Unassigned_Personnel.xlsx');
+    });
+    
+    bindIfExists('dl-nom-assigned-btn', 'click', () => {
+        const assigned = appState.nom_data.filter(p => {
+            const duty = (p['Duty Allocation'] || "").trim();
+            return duty && duty !== "Standby / Reserve";
+        });
+        if(assigned.length === 0) return alert("No assigned personnel found!");
+        downloadBlob('/api/download/nom-roll', {nom_data: assigned}, 'Assigned_Personnel.xlsx');
+    });
 
     bindIfExists('dl-dep-xls-full', 'click', () => downloadBlob('/api/download/deployed-excel', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, mode: 'full', heading: appState.scheme_heading, date: appState.scheme_date}, 'Deployed_Sheet.xlsx'));
     bindIfExists('dl-dep-xls-zone', 'click', () => downloadBlob('/api/download/deployed-excel', {scheme_data: appState.scheme_data, nom_data: appState.nom_data, cmd_names: appState.cmd_names, force_names: appState.force_names, theme: appState.theme, mode: 'zone_sheets', heading: appState.scheme_heading, date: appState.scheme_date}, 'Deployed_Zones.xlsx'));
