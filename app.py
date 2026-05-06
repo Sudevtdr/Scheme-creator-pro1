@@ -112,12 +112,12 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
             elif "🛡️ DIV:" in val0: tags.append('div_header')
             elif "🎯 SEC:" in val0: tags.append('sec_header')
             elif "▼ DUTY POINTS" in val0: tags.append('point_header')
-            elif "📍" in val0:
+            elif "🚩" in val0:
                 if len(vals) > 1 and str(vals[1]).strip() == "RANK":
                     tags.append('deployed_point_header')
                 else:
                     tags.append('point_row')
-            elif "" in val0: tags.append('person_row')
+            elif "👤" in val0: tags.append('person_row')
             elif "🌟 GRAND SCHEME" in val0: tags.append('grand_total_row')
             elif "∑ TOTAL" in val0 and "ZONE" in val0: tags.append('zone_total_row')
             elif "∑ TOTAL" in val0: tags.append('sec_total_row')
@@ -185,7 +185,7 @@ def generate_html_report(df, title, source_tab, theme_colors):
         elif "🛡️ DIV" in val0: r_class = 'div_header'
         elif "🎯 SEC" in val0: r_class = 'sec_header'
         elif "▼ DUTY POINTS" in val0: r_class = 'point_header'
-        elif "📍" in val0:
+        elif "🚩" in val0:
             if len(vals) > 1 and str(vals[1]).strip() == "RANK":
                 r_class = 'deployed_point_header'
             else:
@@ -374,7 +374,7 @@ def build_readable_scheme_df(hierarchy, cmd_names, force_names, heading="", date
                 sec_cpo = sec_wcpo = 0
                 for pt in s_data['points']:
                     p_name = pt[0].upper() if pt[0] else "UNNAMED POINT"
-                    hier_data.append([f"        {point_counter}. 📍 {p_name}", pt[1], pt[2], pt[3]])
+                    hier_data.append([f"        {point_counter}. 🚩 {p_name}", pt[1], pt[2], pt[3]])
                     sec_si += safe_int(pt[1]); sec_cpo += safe_int(pt[2]); sec_wcpo += safe_int(pt[3])
                     point_counter += 1
                 hier_data.append([f"        ∑ TOTAL FOR {s.upper()}", str(sec_si), str(sec_cpo), str(sec_wcpo)])
@@ -541,7 +541,7 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", d
                     bp, tp = parse_turn(p_name)
                     if bp not in matrix_struct[bz]['divs'][bd]['secs'][bs]['points']: matrix_struct[bz]['divs'][bd]['secs'][bs]['points'][bp] = {}
                     
-                    dep_data.append([f"    {int_to_roman(point_counter)}. 📍 {p_name}", "RANK", "GL NUMBER", "PEN", "UNIT", "MOBILE"])
+                    dep_data.append([f"    {int_to_roman(point_counter)}. 🚩 {p_name}", "RANK", "GL NUMBER", "PEN", "UNIT", "MOBILE"])
                     
                     p_str = build_loc_str(z, d, s, pt[0]) if z != "UNZONED" else build_loc_str(d, s, pt[0])
                     if p_str in assignments:
@@ -585,7 +585,7 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", d
                 insert_matrix_block(f"🎯 SEC: {bs.upper()} | OFFICER IN CHARGE", s_data['cmdrs'])
                 pt_counter = 1
                 for bp, p_data in s_data['points'].items():
-                    insert_matrix_block(f"    {int_to_roman(pt_counter)}. 📍 {bp.upper()}", p_data)
+                    insert_matrix_block(f"    {int_to_roman(pt_counter)}. 🚩 {bp.upper()}", p_data)
                     pt_counter += 1
 
     # Post-process to hide empty commander rows in deployment and matrix sheets
