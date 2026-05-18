@@ -1,13 +1,20 @@
+import os
+import sys
 import io
 import re
 import json
 import pandas as pd
 from flask import Flask, request, jsonify, render_template, send_file
 from openpyxl import Workbook
-from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
 # --- Initialize Flask App ---
-app = Flask(__name__)
+if getattr(sys, 'frozen', False):
+    template_folder = os.path.join(sys._MEIPASS, 'templates')
+    static_folder = os.path.join(sys._MEIPASS, 'static')
+    app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
+else:
+    app = Flask(__name__)
 app.config['JSON_SORT_KEYS'] = False
 try: app.json.sort_keys = False
 except AttributeError: pass
@@ -24,7 +31,27 @@ themes = {
     "Royal Purple": {"z": "#4a148c", "d": "#6a1b9a", "s": "#e1bee7", "p": "#f3e5f5", "st": "#f3e5f5", "zt": "#e1bee7", "gt": "#ce93d8", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
     "Crimson Red": {"z": "#b71c1c", "d": "#c62828", "s": "#ffcdd2", "p": "#ffebee", "st": "#ffebee", "zt": "#ffcdd2", "gt": "#ef9a9a", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
     "Steel Slate": {"z": "#263238", "d": "#455a64", "s": "#cfd8dc", "p": "#eceff1", "st": "#eceff1", "zt": "#cfd8dc", "gt": "#b0bec5", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
-    "Cyberpunk Neon": {"z": "#0d0221", "d": "#240046", "s": "#ff007f", "p": "#000000", "st": "#11001c", "zt": "#240046", "gt": "#00f0ff", "zf": "#00f0ff", "df": "#ff007f", "sf": "#ffffff"}
+    "Cyberpunk Neon": {"z": "#0d0221", "d": "#240046", "s": "#ff007f", "p": "#000000", "st": "#11001c", "zt": "#240046", "gt": "#00f0ff", "zf": "#00f0ff", "df": "#ff007f", "sf": "#ffffff"},
+    "Autumn Leaves": {"z": "#d84315", "d": "#f4511e", "s": "#ffcc80", "p": "#fff3e0", "st": "#ffcc80", "zt": "#ffb74d", "gt": "#ffab40", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Spring Blossom": {"z": "#880e4f", "d": "#ab47bc", "s": "#f8bbd0", "p": "#fce4ec", "st": "#f8bbd0", "zt": "#f48fb1", "gt": "#f06292", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Midnight Blue": {"z": "#001021", "d": "#002142", "s": "#003263", "p": "#f0f4f8", "st": "#b8cde0", "zt": "#99badd", "gt": "#6da0d1", "zf": "#ffffff", "df": "#ffffff", "sf": "#ffffff"},
+    "Coffee Roaster": {"z": "#3e2723", "d": "#5d4037", "s": "#d7ccc8", "p": "#efebe9", "st": "#d7ccc8", "zt": "#bcaaa4", "gt": "#a1887f", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Minty Fresh": {"z": "#004d40", "d": "#00796b", "s": "#b2dfdb", "p": "#e0f2f1", "st": "#b2dfdb", "zt": "#80cbc4", "gt": "#4db6ac", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Solar Flare": {"z": "#bf360c", "d": "#f4511e", "s": "#ffccbc", "p": "#fbe9e7", "st": "#ffccbc", "zt": "#ffab91", "gt": "#ff8a65", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Deep Ocean": {"z": "#01579b", "d": "#0277bd", "s": "#b3e5fc", "p": "#e1f5fe", "st": "#b3e5fc", "zt": "#81d4fa", "gt": "#4fc3f7", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Lavender Dream": {"z": "#311b92", "d": "#512da8", "s": "#d1c4e9", "p": "#ede7f6", "st": "#d1c4e9", "zt": "#b39ddb", "gt": "#9575cd", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Neon Green": {"z": "#000000", "d": "#111111", "s": "#333333", "p": "#0a0a0a", "st": "#222222", "zt": "#1a1a1a", "gt": "#39ff14", "zf": "#39ff14", "df": "#39ff14", "sf": "#39ff14"},
+    "Corporate Gray": {"z": "#37474f", "d": "#546e7a", "s": "#cfd8dc", "p": "#eceff1", "st": "#cfd8dc", "zt": "#b0bec5", "gt": "#90a4ae", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Berry Blast": {"z": "#4a148c", "d": "#7b1fa2", "s": "#e1bee7", "p": "#f3e5f5", "st": "#e1bee7", "zt": "#ce93d8", "gt": "#ba68c8", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Gold Rush": {"z": "#f57f17", "d": "#ff8f00", "s": "#fff59d", "p": "#fffde7", "st": "#fff59d", "zt": "#ffe082", "gt": "#ffd54f", "zf": "#000000", "df": "#000000", "sf": "#000000"},
+    "Ice Glacier": {"z": "#01579b", "d": "#0288d1", "s": "#e1f5fe", "p": "#f1fdf8", "st": "#e1f5fe", "zt": "#b3e5fc", "gt": "#81d4fa", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Volcanic Ash": {"z": "#212121", "d": "#424242", "s": "#9e9e9e", "p": "#f5f5f5", "st": "#e0e0e0", "zt": "#bdbdbd", "gt": "#ff5722", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Jungle Canopy": {"z": "#1b5e20", "d": "#33691e", "s": "#c8e6c9", "p": "#e8f5e9", "st": "#c8e6c9", "zt": "#a5d6a7", "gt": "#81c784", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Dusk Skyline": {"z": "#283593", "d": "#4527a0", "s": "#ffccbc", "p": "#fbe9e7", "st": "#ffab91", "zt": "#ff8a65", "gt": "#ff7043", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Pastel Rainbow": {"z": "#ba68c8", "d": "#4fc3f7", "s": "#fff176", "p": "#fbfbfb", "st": "#fff176", "zt": "#81c784", "gt": "#ff8a65", "zf": "#ffffff", "df": "#000000", "sf": "#000000"},
+    "Vampire Red": {"z": "#1a0000", "d": "#330000", "s": "#800000", "p": "#0d0000", "st": "#4d0000", "zt": "#660000", "gt": "#ff0000", "zf": "#ffcccc", "df": "#ffcccc", "sf": "#ffffff"},
+    "Monochrome Grayscale": {"z": "#111111", "d": "#555555", "s": "#aaaaaa", "p": "#eeeeee", "st": "#999999", "zt": "#777777", "gt": "#333333", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"},
+    "Electric Indigo": {"z": "#1a237e", "d": "#283593", "s": "#c5cae9", "p": "#e8eaf6", "st": "#c5cae9", "zt": "#9fa8da", "gt": "#5c6bc0", "zf": "#ffffff", "df": "#ffffff", "sf": "#000000"}
 }
 
 def get_contrasting_text(hex_code):
@@ -35,6 +62,12 @@ def get_contrasting_text(hex_code):
     luminance = (0.299*r + 0.587*g + 0.114*b)/255
     return "black" if luminance > 0.5 else "white"
 
+def get_theme_colors(data):
+    theme_name = data.get('theme', 'Default Blue')
+    if theme_name == 'Custom':
+        return data.get('custom_theme', themes['Default Blue'])
+    return themes.get(theme_name, themes['Default Blue'])
+
 def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
     output = io.BytesIO()
     wb = Workbook()
@@ -44,6 +77,11 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
         if str(c).lower() == "black": return "000000"
         if str(c).lower() == "white": return "FFFFFF"
         return str(c).lstrip('#').upper()
+    
+    thin_border = Border(left=Side(style='thin', color='BFBFBF'), 
+                         right=Side(style='thin', color='BFBFBF'), 
+                         top=Side(style='thin', color='BFBFBF'), 
+                         bottom=Side(style='thin', color='BFBFBF'))
     
     chunks = {"Full Scheme": df}
     if output_mode == "zone_sheets":
@@ -63,26 +101,17 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
     for title, chunk_df in chunks.items():
         ws = wb.create_sheet(title=title if title else "Sheet")
         columns = chunk_df.columns.tolist()
-        ws.append(columns)
-        for i in range(1, len(columns)+1): ws.cell(row=1, column=i).font = Font(bold=True)
         
-        if source_tab == "preview":
-            ws.column_dimensions['A'].width = 60
-            for i in range(2, len(columns)+1): ws.column_dimensions[chr(64+i)].width = 15
-        elif source_tab == "deployed":
-            ws.column_dimensions['A'].width = 50
-            for i, w in enumerate([15, 15, 15, 20, 15], 2): ws.column_dimensions[chr(64+i)].width = w
-        elif source_tab == "matrix":
-            ws.column_dimensions['A'].width = 35
-            for i in range(2, len(columns)+1): ws.column_dimensions[chr(64+i)].width = 45
-        elif source_tab == "totals":
-            ws.column_dimensions['A'].width = 20
-            ws.column_dimensions['B'].width = 30
-            for i in range(3, len(columns)+1): ws.column_dimensions[chr(64+i)].width = 15
+        if source_tab != "deployed":
+            ws.append(columns)
+            for i in range(1, len(columns)+1): ws.cell(row=1, column=i).font = Font(bold=True)
+            for i in range(1, len(columns)+1):
+                ws.cell(row=1, column=i).border = thin_border
 
         for _, row in chunk_df.iterrows():
             vals = row.tolist()
-            ws.append(vals)
+            clean_vals = ["" if str(v) == "__MERGE__" else v for v in vals]
+            ws.append(clean_vals)
             current_row = ws.max_row
             
             val0 = str(vals[0])
@@ -106,6 +135,7 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
                         cell = ws.cell(row=current_row, column=i)
                         cell.fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
                         cell.font = Font(color=font_color, bold=is_bold)
+                        cell.border = thin_border
                 continue
 
             if "🏢 ZONE:" in val0 or "STANDBY / RESERVE" in val0: tags.append('zone_header')
@@ -123,6 +153,7 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
             elif "∑ TOTAL" in val0: tags.append('sec_total_row')
             elif "📜 SCHEME:" in val0: tags.append('main_heading_row')
             elif "📅 DATE:" in val0: tags.append('date_heading_row')
+            elif "📝 CONCLUSION:" in val0: tags.append('conclusion_row')
             else: tags.append('point_row')
 
             fill_color, font_color, is_bold = None, "000000", False
@@ -134,11 +165,13 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
             elif 'sec_total_row' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['st']), to_hex(get_contrasting_text(theme_colors['st'])), True
             elif 'main_heading_row' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['z']), to_hex(theme_colors['zf']), True
             elif 'date_heading_row' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['d']), to_hex(theme_colors['df']), True
+            elif 'conclusion_row' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['st']), to_hex(get_contrasting_text(theme_colors['st'])), True
             elif 'point_header' in tags:
                 fill_color, font_color, is_bold = to_hex(theme_colors['st']), to_hex(get_contrasting_text(theme_colors['st'])), True
                 ws.cell(row=current_row, column=1).font = Font(color=font_color, bold=True, underline="single")
                 for c in range(2, len(columns)+1): ws.cell(row=current_row, column=c).font = Font(color=font_color, bold=True)
                 for i in range(1, len(columns) + 1): ws.cell(row=current_row, column=i).fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
+                for i in range(1, len(columns) + 1): ws.cell(row=current_row, column=i).border = thin_border
                 continue
             elif 'deployed_point_header' in tags:
                 fill_color, font_color, is_bold = to_hex(theme_colors['st']), to_hex(get_contrasting_text(theme_colors['st'])), True
@@ -150,20 +183,55 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
                     cell = ws.cell(row=current_row, column=i)
                     cell.fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type="solid")
                     cell.font = Font(color=font_color, bold=is_bold)
+                    cell.border = thin_border
             elif source_tab == "matrix":
-                 for i in range(1, len(columns) + 1): ws.cell(row=current_row, column=i).font = Font(color=font_color, bold=is_bold)
+                 for i in range(1, len(columns) + 1):
+                    cell = ws.cell(row=current_row, column=i)
+                    cell.font = Font(color=font_color, bold=is_bold)
+                    cell.border = thin_border
 
             if ('zone_header' in tags or 'div_header' in tags or 'sec_header' in tags) and source_tab in ["preview", "deployed"]:
                 ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=len(columns))
             
-            if 'main_heading_row' in tags or 'date_heading_row' in tags:
+            if 'main_heading_row' in tags or 'date_heading_row' in tags or 'conclusion_row' in tags:
                 ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=len(columns))
-                ws.cell(row=current_row, column=1).alignment = Alignment(horizontal='center', vertical='center')
+                ws.cell(row=current_row, column=1).alignment = Alignment(horizontal='center' if 'conclusion_row' not in tags else 'left', vertical='center', wrap_text=True)
                 if 'main_heading_row' in tags: ws.cell(row=current_row, column=1).font = Font(color=font_color, bold=is_bold, size=14)
                 if 'date_heading_row' in tags: ws.cell(row=current_row, column=1).font = Font(color=font_color, bold=is_bold, size=12)
                 
             if source_tab == "matrix":
                 for i in range(1, len(columns) + 1): ws.cell(row=current_row, column=i).alignment = Alignment(wrap_text=True, vertical='center')
+                
+                merge_start = None
+                for c_idx in range(1, len(vals) + 1):
+                    if str(vals[c_idx-1]) == "__MERGE__":
+                        if merge_start is None: merge_start = c_idx - 1
+                    else:
+                        if merge_start is not None:
+                            ws.merge_cells(start_row=current_row, start_column=merge_start, end_row=current_row, end_column=c_idx-1)
+                            ws.cell(row=current_row, column=merge_start).alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+                            merge_start = None
+                if merge_start is not None:
+                    ws.merge_cells(start_row=current_row, start_column=merge_start, end_row=current_row, end_column=len(vals))
+                    ws.cell(row=current_row, column=merge_start).alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+        # Auto-adjust column widths
+        for column_cells in ws.columns:
+            max_length = 0
+            column_letter = column_cells[0].column_letter
+            for cell in column_cells:
+                try:
+                    if cell.value:
+                        # Check for multiline content
+                        lines = str(cell.value).split('\n')
+                        cell_len = max(len(line) for line in lines)
+                        if cell_len > max_length:
+                            max_length = cell_len
+                except:
+                    pass
+            # Add padding, with min and max widths
+            adjusted_width = min(max(max_length + 4, 12), 70)
+            ws.column_dimensions[column_letter].width = adjusted_width
 
     wb.save(output)
     return output.getvalue()
@@ -174,10 +242,15 @@ def generate_html_report(df, title, source_tab, theme_colors):
     st_bg, st_fg = theme_colors['st'], get_contrasting_text(theme_colors['st'])
     
     html = f"<html><head><meta charset='utf-8'><title>{title}</title>"
-    html += f"<style>body {{ font-family: 'Segoe UI', sans-serif; margin: 20px; font-size: 12px; background-color: {p_bg}; color: {p_fg}; }} table {{ width: 100%; border-collapse: collapse; }} th, td {{ border: 1px solid #dddddd; padding: 6px; text-align: left; vertical-align: top; }} th {{ background-color: #f2f2f2; color: #000; }} .zone_header {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; }} .div_header {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; }} .sec_header {{ background-color: {s_bg} !important; color: {s_fg} !important; font-weight: bold; }} .point_header {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; text-decoration: underline; }} .deployed_point_header {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; }} .person_row {{ background-color: {p_bg} !important; color: {p_fg} !important; }} .main_heading_row {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; font-size: 16px; text-align: center; }} .date_heading_row {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; font-size: 14px; text-align: center; }} @media print {{ tr td {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }} }}</style></head><body><h2>{title}</h2><table><thead><tr>"
+    html += f"<style>body {{ font-family: 'Segoe UI', sans-serif; margin: 20px; font-size: 12px; background-color: {p_bg}; color: {p_fg}; }} table {{ width: 100%; border-collapse: collapse; }} th, td {{ border: 1px solid #dddddd; padding: 6px; text-align: left; vertical-align: top; }} th {{ background-color: #f2f2f2; color: #000; }} .zone_header {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; }} .div_header {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; }} .sec_header {{ background-color: {s_bg} !important; color: {s_fg} !important; font-weight: bold; }} .point_header {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; text-decoration: underline; }} .deployed_point_header {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; }} .person_row {{ background-color: {p_bg} !important; color: {p_fg} !important; }} .main_heading_row {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; font-size: 16px; text-align: center; }} .date_heading_row {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; font-size: 14px; text-align: center; }} .conclusion_row {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; white-space: pre-wrap; }} @media print {{ tr td {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }} }}</style></head><body><h2>{title}</h2><table>"
+    
     columns = df.columns.tolist()
-    for col in columns: html += f"<th>{col}</th>"
-    html += "</tr></thead><tbody>"
+    if source_tab != "deployed":
+        html += "<thead><tr>"
+        for col in columns: html += f"<th>{col}</th>"
+        html += "</tr></thead>"
+        
+    html += "<tbody>"
     for _, row in df.iterrows():
         vals = row.tolist()
         val0 = str(vals[0])
@@ -196,12 +269,25 @@ def generate_html_report(df, title, source_tab, theme_colors):
         elif "∑ TOTAL" in val0: r_class = 'sec_total_row'
         elif "📜 SCHEME" in val0: r_class = 'main_heading_row'
         elif "📅 DATE" in val0: r_class = 'date_heading_row'
+        elif "📝 CONCLUSION" in val0: r_class = 'conclusion_row'
         else: r_class = 'point_row'
         if r_class in ['zone_header', 'div_header', 'sec_header'] and source_tab in ['preview', 'deployed']: html += f"<tr class='{r_class}'><td colspan='{len(columns)}'>{str(vals[0])}</td></tr>"
-        elif r_class in ['main_heading_row', 'date_heading_row']: html += f"<tr class='{r_class}'><td colspan='{len(columns)}' style='text-align: center;'>{str(vals[0])}</td></tr>"
+        elif r_class in ['main_heading_row', 'date_heading_row', 'conclusion_row']: html += f"<tr class='{r_class}'><td colspan='{len(columns)}' style='text-align: {'center' if r_class != 'conclusion_row' else 'left'}; font-weight: bold;'>{str(vals[0])}</td></tr>"
         else:
             html += f"<tr class='{r_class}'>"
-            for val in vals: html += f"<td>{str(val).replace(chr(10), '<br>')}</td>"
+            c_idx = 0
+            while c_idx < len(vals):
+                if c_idx < len(vals) - 1 and str(vals[c_idx+1]) == "__MERGE__":
+                    colspan = 1
+                    while c_idx + colspan < len(vals) and str(vals[c_idx+colspan]) == "__MERGE__":
+                        colspan += 1
+                    val = str(vals[c_idx]).replace(chr(10), '<br>')
+                    html += f"<td colspan='{colspan}' style='text-align: center; vertical-align: middle;'>{val}</td>"
+                    c_idx += colspan
+                else:
+                    val = "" if str(vals[c_idx]) == "__MERGE__" else str(vals[c_idx]).replace(chr(10), '<br>')
+                    html += f"<td>{val}</td>"
+                    c_idx += 1
             html += "</tr>"
     html += "</tbody></table></body></html>"
     return html.encode('utf-8')
@@ -248,6 +334,28 @@ def to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Sheet1')
+        ws = writer.sheets['Sheet1']
+        thin_border = Border(left=Side(style='thin', color='BFBFBF'), 
+                             right=Side(style='thin', color='BFBFBF'), 
+                             top=Side(style='thin', color='BFBFBF'), 
+                             bottom=Side(style='thin', color='BFBFBF'))
+        # Auto-adjust column widths
+        for column_cells in ws.columns:
+            max_length = 0
+            column_letter = column_cells[0].column_letter
+            for cell in column_cells:
+                try:
+                    if cell.value:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max(max_length + 2, 12), 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+
+        for row in ws.iter_rows():
+            for cell in row:
+                cell.border = thin_border
     processed_data = output.getvalue()
     return processed_data
 
@@ -439,7 +547,7 @@ def get_scheme_requirements(df, cmd_names, force_names):
             if ip: add_req(loc_z, cmd_names[2], ip)
     return reqs
 
-def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", date=""):
+def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", date="", conclusion=""):
     assignments = {}
     rank_prio = {force_names[0]: 1, force_names[1]: 2, force_names[2]: 3, cmd_names[0]: 0, cmd_names[1]: 0, cmd_names[2]: 0}
     
@@ -565,16 +673,25 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", d
 
     def insert_matrix_block(name_prefix, data_dict):
         if not data_dict:
-            matrix_data.append([name_prefix, "(NONE)"] + [""]*(len(turn_list)-1))
+            matrix_data.append([name_prefix, "(NONE)"] + ["__MERGE__"]*(len(turn_list)-1))
             return
             
+        has_specific_turns = any(k != 'GENERAL' for k in data_dict.keys())
         max_p = max((len(lst) for lst in data_dict.values()), default=0)
+        
         for i in range(max_p):
             row_vals = [name_prefix if i == 0 else ""]
-            for t in turn_list:
-                if t in data_dict and i < len(data_dict[t]): row_vals.append(get_compressed_person(data_dict[t][i]))
-                elif 'GENERAL' in data_dict and i < len(data_dict['GENERAL']): row_vals.append(get_compressed_person(data_dict['GENERAL'][i]))
-                else: row_vals.append("")
+            if not has_specific_turns and 'GENERAL' in data_dict:
+                if i < len(data_dict['GENERAL']):
+                    row_vals.append(get_compressed_person(data_dict['GENERAL'][i]))
+                    row_vals.extend(["__MERGE__"] * (len(turn_list) - 1))
+                else:
+                    row_vals.extend([""] * len(turn_list))
+            else:
+                for t in turn_list:
+                    if t in data_dict and i < len(data_dict[t]): row_vals.append(get_compressed_person(data_dict[t][i]))
+                    elif 'GENERAL' in data_dict and i < len(data_dict['GENERAL']): row_vals.append(get_compressed_person(data_dict['GENERAL'][i]))
+                    else: row_vals.append("")
             matrix_data.append(row_vals)
 
     for bz, z_data in matrix_struct.items():
@@ -598,6 +715,12 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", d
         if "OFFICER IN CHARGE" in str(matrix_data[i][0]) and len(matrix_data[i]) > 1 and "(NONE)" in str(matrix_data[i][1]):
             matrix_data[i] = [""] * len(matrix_data[i])
             
+    if conclusion:
+        dep_data.append(["", "", "", "", "", ""])
+        dep_data.append([f"📝 CONCLUSION: {conclusion}", "", "", "", "", ""])
+        matrix_data.append([""] * len(matrix_cols))
+        matrix_data.append([f"📝 CONCLUSION: {conclusion}"] + [""] * (len(matrix_cols)-1))
+        
     return pd.DataFrame(dep_data, columns=["HIERARCHY / LOCATION / NAME", "RANK", "GL NUMBER", "PEN", "UNIT", "MOBILE"]), pd.DataFrame(matrix_data, columns=matrix_cols)
 
 def get_manpower_totals_df(df, cmd_names, force_names):
@@ -727,22 +850,11 @@ def upload_nominal():
     file = request.files['file']
     try:
         df = pd.read_excel(file).fillna("")
-        nom_headers = ["Sl No", "Name", "Rank (Raw)", "GL Number", "PEN", "Unit", "Mobile", "Remarks", "Preferred Rank", "Duty Allocation"]
-        df = df.iloc[:, :len(nom_headers)]
-        df.columns = nom_headers[:len(df.columns)]
-        for missing in nom_headers:
-            if missing not in df.columns: df[missing] = ""
-        mask = df.astype(str).apply(lambda s: s.str.strip()).ne("").any(axis=1)
-        df = df[mask].astype(str)
-        if 'Assignment Type' not in df.columns: df['Assignment Type'] = ""
-        
-        existing_data_str = request.form.get('existing_data', '[]')
-        if existing_data_str and existing_data_str.strip() != '[]':
-            existing_df = pd.DataFrame(json.loads(existing_data_str)).fillna("")
-            if not existing_df.empty:
-                df = pd.concat([existing_df, df], ignore_index=True).fillna("")
-                
-        return jsonify(df.to_dict('records'))
+        raw_cols = df.columns.tolist()
+        return jsonify({
+            'raw_columns': raw_cols,
+            'raw_data': df.to_dict('records')
+        })
     except Exception as e: return jsonify({'error': str(e)}), 400
 
 @app.route('/api/clean-ranks', methods=['POST'])
@@ -908,7 +1020,7 @@ def readable_scheme():
 @app.route('/api/deployed-data', methods=['POST'])
 def deployed_data():
     data = request.json
-    dep_df, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
+    dep_df, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''), data.get('conclusion', ''))
     return jsonify({"deployed": dep_df.to_dict('records'), "matrix": mat_df.to_dict('records')})
 
 
@@ -923,21 +1035,21 @@ def download_raw_scheme():
 def download_totals():
     data = request.json
     totals_df = get_manpower_totals_df(pd.DataFrame(data['scheme_data']).fillna(""), data['cmd_names'], data['force_names'])
-    excel_data = generate_styled_excel(totals_df, "totals", themes[data.get('theme', 'Default Blue')], "full")
+    excel_data = generate_styled_excel(totals_df, "totals", get_theme_colors(data), "full")
     return send_file(io.BytesIO(excel_data), download_name="Manpower_Totals.xlsx", as_attachment=True)
 
 @app.route('/api/download/readable-excel', methods=['POST'])
 def download_readable_excel():
     data = request.json
     readable_df = build_readable_scheme_df(get_aggregated_hierarchy(pd.DataFrame(data['scheme_data']).fillna("")), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
-    excel_data = generate_styled_excel(readable_df, "preview", themes[data.get('theme', 'Default Blue')], "full")
+    excel_data = generate_styled_excel(readable_df, "preview", get_theme_colors(data), "full")
     return send_file(io.BytesIO(excel_data), download_name="Readable_Scheme.xlsx", as_attachment=True)
 
 @app.route('/api/download/readable-html', methods=['POST'])
 def download_readable_html():
     data = request.json
     readable_df = build_readable_scheme_df(get_aggregated_hierarchy(pd.DataFrame(data['scheme_data']).fillna("")), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
-    html_data = generate_html_report(readable_df, "Readable Scheme", "preview", themes[data.get('theme', 'Default Blue')])
+    html_data = generate_html_report(readable_df, "Readable Scheme", "preview", get_theme_colors(data))
     return send_file(io.BytesIO(html_data), download_name="Readable_Scheme.html", as_attachment=True)
 
 @app.route('/api/download/nom-template', methods=['POST'])
@@ -951,35 +1063,164 @@ def download_nom_roll():
     mask = df.astype(str).apply(lambda s: s.str.strip()).ne("").any(axis=1)
     return send_file(io.BytesIO(to_excel(df[mask])), download_name="Nominal_Roll.xlsx", as_attachment=True)
 
+@app.route('/api/download/nom-summary', methods=['POST'])
+def download_nom_summary():
+    data = request.json
+    df = pd.DataFrame(data['nom_data']).fillna("").drop(columns=["Assignment Type"], errors="ignore")
+    mask = df.astype(str).apply(lambda s: s.str.strip()).ne("").any(axis=1)
+    df = df[mask]
+    
+    theme_colors = get_theme_colors(data)
+    cmd_names = data.get('cmd_names', ["SP", "DySP", "IP"])
+    force_names = data.get('force_names', ["SI/ASI", "SCPO/CPO", "WSCPO/WCPO"])
+    filters = data.get('filters', {})
+    
+    def to_hex(c):
+        if str(c).lower() == "black": return "000000"
+        if str(c).lower() == "white": return "FFFFFF"
+        return str(c).lstrip('#').upper()
+        
+    thin_border = Border(left=Side(style='thin', color='BFBFBF'), 
+                         right=Side(style='thin', color='BFBFBF'), 
+                         top=Side(style='thin', color='BFBFBF'), 
+                         bottom=Side(style='thin', color='BFBFBF'))
+
+    def add_filter_header(ws, filters_dict):
+        if not filters_dict: return
+        
+        filter_texts = []
+        filter_map = {'zone': 'Zone', 'division': 'Division', 'sector': 'Sector', 'unit': 'Unit', 'rank': 'Rank', 'status': 'Status'}
+        for key, label in filter_map.items():
+            val = filters_dict.get(key)
+            if val and val != 'All':
+                filter_texts.append(f"{label}: {val}")
+        
+        if filter_texts:
+            ws.insert_rows(1)
+            ws.insert_rows(1)
+            
+            heading_cell = ws.cell(row=1, column=1, value="FILTERS APPLIED")
+            heading_cell.font = Font(bold=True, color="1F497D")
+            
+            filter_string = ", ".join(filter_texts)
+            filter_cell = ws.cell(row=2, column=1, value=filter_string)
+            ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=max(5, ws.max_column))
+            filter_cell.font = Font(italic=True, color="4B5563")
+            filter_cell.alignment = Alignment(wrap_text=True)
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        if not df.empty:
+            df_sum = df.copy()
+            df_sum['RankForSummary'] = df_sum.apply(lambda row: str(row.get('Preferred Rank', '')).strip() or str(row.get('Rank (Raw)', '')).strip() or 'Unranked', axis=1)
+            if 'Unit' not in df_sum.columns:
+                df_sum['Unit'] = ''
+            df_sum['UnitForSummary'] = df_sum['Unit'].apply(lambda x: str(x).strip() if str(x).strip() else 'Unknown Unit')
+            
+            summary_df = pd.crosstab(df_sum['UnitForSummary'], df_sum['RankForSummary'], margins=True, margins_name="TOTAL")
+            summary_df = summary_df.reset_index()
+            summary_df.rename(columns={'UnitForSummary': 'Unit'}, inplace=True)
+            
+            # Reorder columns to respect hierarchy
+            desired_cols = ["Unit"] + cmd_names + force_names
+            existing_cols = list(summary_df.columns)
+            other_cols = [c for c in existing_cols if c not in desired_cols and c != "TOTAL"]
+            final_order = [c for c in desired_cols if c in existing_cols] + other_cols + (["TOTAL"] if "TOTAL" in existing_cols else [])
+            summary_df = summary_df[final_order]
+            
+            summary_df.to_excel(writer, index=False, sheet_name='Unit Summary')
+        else:
+            pd.DataFrame(columns=["Unit", "TOTAL"]).to_excel(writer, index=False, sheet_name='Unit Summary')
+            
+        df.to_excel(writer, index=False, sheet_name='Filtered Data')
+        
+        wb = writer.book
+        ws_sum = wb['Unit Summary']
+        ws_data = wb['Filtered Data']
+        
+        add_filter_header(ws_sum, filters)
+        add_filter_header(ws_data, filters)
+        
+        header_fill = PatternFill(start_color=to_hex(theme_colors['z']), end_color=to_hex(theme_colors['z']), fill_type="solid")
+        header_font = Font(color=to_hex(theme_colors['zf']), bold=True)
+        total_fill = PatternFill(start_color=to_hex(theme_colors['gt']), end_color=to_hex(theme_colors['gt']), fill_type="solid")
+        total_font = Font(color=to_hex(get_contrasting_text(theme_colors['gt'])), bold=True)
+        row_fill = PatternFill(start_color=to_hex(theme_colors['p']), end_color=to_hex(theme_colors['p']), fill_type="solid")
+        row_font = Font(color=to_hex(get_contrasting_text(theme_colors['p'])))
+        
+        # Auto-adjust column widths for both sheets
+        for ws in [ws_sum, ws_data]:
+            for column_cells in ws.columns:
+                max_length = 0
+                column_letter = column_cells[0].column_letter
+                for cell in column_cells:
+                    try:
+                        if cell.value:
+                            max_length = max(max_length, len(str(cell.value)))
+                    except:
+                        pass
+                adjusted_width = min(max(max_length + 2, 12), 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+        for row in ws_sum.iter_rows():
+            is_header = (row[0].row == 1)
+            is_grand_total = (str(row[0].value).strip().upper() == "TOTAL") if not is_header else False
+            for cell in row:
+                if is_header: cell.fill, cell.font = header_fill, header_font
+                elif is_grand_total: cell.fill, cell.font = total_fill, total_font
+                else:
+                    cell.fill = row_fill
+                    if cell.column == ws_sum.max_column or cell.column == 1:
+                        cell.font = Font(color=to_hex(get_contrasting_text(theme_colors['p'])), bold=True)
+                    else:
+                        cell.font = row_font
+                cell.border = thin_border
+        
+        for row in ws_data.iter_rows():
+            is_header = (row[0].row == 1)
+            for cell in row:
+                if is_header: cell.fill, cell.font = header_fill, header_font
+                else: cell.fill, cell.font = row_fill, row_font
+                cell.border = thin_border
+        
+    return send_file(io.BytesIO(output.getvalue()), download_name="Filtered_Nominal_Summary.xlsx", as_attachment=True)
+
 @app.route('/api/download/deployed-excel', methods=['POST'])
 def download_deployed_excel():
     data = request.json
-    dep_df, _ = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
-    excel_data = generate_styled_excel(dep_df, "deployed", themes[data.get('theme', 'Default Blue')], data.get('mode', 'full'))
+    dep_df, _ = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''), data.get('conclusion', ''))
+    excel_data = generate_styled_excel(dep_df, "deployed", get_theme_colors(data), data.get('mode', 'full'))
     name = "Deployed_Zones.xlsx" if data.get('mode') == 'zone_sheets' else "Deployed_Sheet.xlsx"
     return send_file(io.BytesIO(excel_data), download_name=name, as_attachment=True)
 
 @app.route('/api/download/deployed-html', methods=['POST'])
 def download_deployed_html():
     data = request.json
-    dep_df, _ = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
-    html_data = generate_html_report(dep_df, "Deployed Scheme", "deployed", themes[data.get('theme', 'Default Blue')])
+    dep_df, _ = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''), data.get('conclusion', ''))
+    html_data = generate_html_report(dep_df, "Deployed Scheme", "deployed", get_theme_colors(data))
     return send_file(io.BytesIO(html_data), download_name="Deployed_Report.html", as_attachment=True)
 
 @app.route('/api/download/matrix-excel', methods=['POST'])
 def download_matrix_excel():
     data = request.json
-    _, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
-    excel_data = generate_styled_excel(mat_df, "matrix", themes[data.get('theme', 'Default Blue')], data.get('mode', 'full'))
+    _, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''), data.get('conclusion', ''))
+    excel_data = generate_styled_excel(mat_df, "matrix", get_theme_colors(data), data.get('mode', 'full'))
     name = "Matrix_Zones.xlsx" if data.get('mode') == 'zone_sheets' else "Matrix_Sheet.xlsx"
     return send_file(io.BytesIO(excel_data), download_name=name, as_attachment=True)
 
 @app.route('/api/download/matrix-html', methods=['POST'])
 def download_matrix_html():
     data = request.json
-    _, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''))
-    html_data = generate_html_report(mat_df, "Matrix Matrix", "matrix", themes[data.get('theme', 'Default Blue')])
+    _, mat_df = build_deployed_data(pd.DataFrame(data['scheme_data']).fillna(""), pd.DataFrame(data.get('nom_data', [])).fillna(""), data['cmd_names'], data['force_names'], data.get('heading', ''), data.get('date', ''), data.get('conclusion', ''))
+    html_data = generate_html_report(mat_df, "Matrix Matrix", "matrix", get_theme_colors(data))
     return send_file(io.BytesIO(html_data), download_name="Matrix_Report.html", as_attachment=True)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    import webbrowser
+    from threading import Timer
+
+    def open_browser():
+        webbrowser.open_new('http://127.0.0.1:5000/')
+        
+    Timer(1.5, open_browser).start()
+    app.run(port=5000, debug=False)
