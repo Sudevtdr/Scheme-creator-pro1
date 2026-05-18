@@ -51,15 +51,29 @@
             outline: 2px solid #3b82f6;
             background: #eff6ff;
         }
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 700px; border-radius: 8px; max-height: 80vh; overflow-y: auto;
+        }
+        .mapper-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .mapper-table th, .mapper-table td { padding: 8px; border: 1px solid #ddd; text-align: left; }
+        .log-entry { padding: 4px 0; border-bottom: 1px solid #eee; font-family: monospace; font-size: 13px;}
+        .color-picker-group { display: flex; flex-direction: column; align-items: center; font-size: 0.8em; }
+        .color-picker-group input[type="color"] { border: none; padding: 0; width: 30px; height: 30px; border-radius: 4px; cursor: pointer; }
     </style>
 </head>
 <body>
 
     <div class="container">
         <!-- Header -->
-        <div class="custom-header">
-            <h1>🛡️ Scheme Creator PRO</h1>
-            <p>TACTICAL DEPLOYMENT MANAGEMENT SYSTEM</p>
+        <div class="custom-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h1>🛡️ Scheme Creator PRO</h1>
+                <p>TACTICAL DEPLOYMENT MANAGEMENT SYSTEM</p>
+            </div>
+            <button id="show-log-btn" class="stButton" style="background-color: #475569; color: white;">📜 View Action Log</button>
         </div>
 
         <!-- Settings & Project Management -->
@@ -67,9 +81,13 @@
             <div class="proj-mgmt" style="flex: 1; min-width: 300px;">
                 <h4>💾 Project Management</h4>
                 <p style="font-size: 0.85em; color: #64748b; margin-top: 0;">Save your entire workflow (Scheme, Nominal Roll & Settings)</p>
-                <button id="save-proj-btn" class="stButton" style="background-color: #1d4ed8; color: white; border: none;">💾 Save Project (.scproj)</button>
-                <div style="margin-top: 10px;">
-                    <label style="font-weight: 600;">📂 Load Project: <input type="file" id="load-proj-input" accept=".scproj"></label>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <button id="save-proj-btn" class="stButton" style="background-color: #1d4ed8; color: white; border: none;">💾 Save</button>
+                    <button id="save-as-proj-btn" class="stButton" style="background-color: #475569; color: white; border: none;">Save As...</button>
+                </div>
+                <div>
+                    <button id="load-proj-btn" class="stButton" style="background-color: #10b981; color: white; border: none;">📂 Load Project</button>
+                    <input type="file" id="load-proj-input" accept=".scproj" style="display: none;">
                 </div>
             </div>
             <div class="global-settings" style="flex: 2; min-width: 400px;">
@@ -88,9 +106,46 @@
                             <option value="Crimson Red">Crimson Red</option>
                             <option value="Steel Slate">Steel Slate</option>
                             <option value="Cyberpunk Neon">Cyberpunk Neon</option>
+                            <option value="Autumn Leaves">Autumn Leaves</option>
+                            <option value="Spring Blossom">Spring Blossom</option>
+                            <option value="Midnight Blue">Midnight Blue</option>
+                            <option value="Coffee Roaster">Coffee Roaster</option>
+                            <option value="Minty Fresh">Minty Fresh</option>
+                            <option value="Solar Flare">Solar Flare</option>
+                            <option value="Deep Ocean">Deep Ocean</option>
+                            <option value="Lavender Dream">Lavender Dream</option>
+                            <option value="Neon Green">Neon Green</option>
+                            <option value="Corporate Gray">Corporate Gray</option>
+                            <option value="Berry Blast">Berry Blast</option>
+                            <option value="Gold Rush">Gold Rush</option>
+                            <option value="Ice Glacier">Ice Glacier</option>
+                            <option value="Volcanic Ash">Volcanic Ash</option>
+                            <option value="Jungle Canopy">Jungle Canopy</option>
+                            <option value="Dusk Skyline">Dusk Skyline</option>
+                            <option value="Pastel Rainbow">Pastel Rainbow</option>
+                            <option value="Vampire Red">Vampire Red</option>
+                            <option value="Monochrome Grayscale">Monochrome Grayscale</option>
+                            <option value="Electric Indigo">Electric Indigo</option>
+                            <option value="Custom" style="font-weight: bold; background: #e2e8f0;">🛠️ Custom Theme...</option>
                         </select>
                     </label>
                 </div>
+                
+                <!-- Custom Theme Builder Panel -->
+                <div id="custom-theme-panel" style="display: none; gap: 15px; flex-wrap: wrap; background: #f8fafc; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; margin-bottom: 10px;">
+                    <div class="color-picker-group"><label>Zone</label><input type="color" id="ct-z" value="#1f497d"></div>
+                    <div class="color-picker-group"><label>Z-Text</label><input type="color" id="ct-zf" value="#ffffff"></div>
+                    <div class="color-picker-group"><label>Div</label><input type="color" id="ct-d" value="#4f81bd"></div>
+                    <div class="color-picker-group"><label>D-Text</label><input type="color" id="ct-df" value="#ffffff"></div>
+                    <div class="color-picker-group"><label>Sec</label><input type="color" id="ct-s" value="#dce6f1"></div>
+                    <div class="color-picker-group"><label>S-Text</label><input type="color" id="ct-sf" value="#000000"></div>
+                    <span style="border-left: 1px solid #ccc;"></span>
+                    <div class="color-picker-group"><label>Grnd Tot</label><input type="color" id="ct-gt" value="#d4edda"></div>
+                    <div class="color-picker-group"><label>Zn Tot</label><input type="color" id="ct-zt" value="#e6e6e6"></div>
+                    <div class="color-picker-group"><label>Sec Tot</label><input type="color" id="ct-st" value="#f2f2f2"></div>
+                    <div class="color-picker-group"><label>Point/Per</label><input type="color" id="ct-p" value="#ffffff"></div>
+                </div>
+
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                     <label>Zone Cmdr: <input type="text" id="cmd-z" value="SP" size="6" style="padding: 4px;"></label>
                     <label>Div Cmdr: <input type="text" id="cmd-d" value="DySP" size="6" style="padding: 4px;"></label>
@@ -112,6 +167,7 @@
             <button class="tab-link" onclick="openTab(event, 'tab5')">🎯 5. Manual Assign</button>
             <button class="tab-link" onclick="openTab(event, 'tab6')">✅ 6. Deployed Sheet</button>
             <button class="tab-link" onclick="openTab(event, 'tab7')">🗓️ 7. Matrix Sheet</button>
+            <button class="tab-link" onclick="openTab(event, 'tab8')">📈 8. Summary</button>
         </div>
 
         <!-- Tab Content -->
@@ -195,6 +251,7 @@
                 <button id="dl-nom-roll-btn" class="stButton" style="background-color: #e0f2fe; border-color: #bae6fd;">📥 Download Nominal Roll</button>
                 <button id="dl-nom-unassigned-btn" class="stButton" style="background-color: #fef08a; border-color: #fde047;">📥 Download Unassigned</button>
                 <button id="dl-nom-assigned-btn" class="stButton" style="background-color: #dcfce7; border-color: #bbf7d0;">📥 Download Assigned</button>
+                <label style="margin-left: 15px; font-weight: 600; color: #ef4444; display: inline-flex; align-items: center;"><input type="checkbox" id="nom-unassigned-filter-chk" style="margin-right: 5px;"> Filter Unassigned Only</label>
             </div>
             <div id="nom-tally-dashboard" style="display: flex; gap: 10px; margin-bottom: 15px;"></div>
             <div id="nom-editor-container"></div>
@@ -241,11 +298,63 @@
             <div id="matrix-sheet-container"></div>
         </div>
 
+        <div id="tab8" class="tab-content">
+            <h3>📈 8. Summary & Filter</h3>
+            <div class="control-panel">
+                <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center; flex-wrap: wrap;">
+                    <select id="ns-z-filter" style="padding: 4px;"><option value="All">Filter Zone (All)</option></select>
+                    <select id="ns-d-filter" style="padding: 4px;"><option value="All">Filter Division (All)</option></select>
+                    <select id="ns-s-filter" style="padding: 4px;"><option value="All">Filter Sector (All)</option></select>
+                    <select id="ns-unit-filter" style="padding: 4px;"><option value="All">Filter Unit (All)</option></select>
+                    <select id="ns-rank-filter" style="padding: 4px;"><option value="All">Filter Rank (All)</option></select>
+                    <select id="ns-status-filter" style="padding: 4px;">
+                        <option value="All">Assignment Status (All)</option>
+                        <option value="Assigned">Assigned Only</option>
+                        <option value="Unassigned">Unassigned Only (Inc. Reserve)</option>
+                    </select>
+                    <button id="ns-generate-btn" class="stButton">📊 Generate Summary</button>
+                    <button id="dl-ns-xls-btn" class="stButton" style="background-color: #dcfce7; border-color: #bbf7d0;">📥 Download Excel</button>
+                </div>
+            </div>
+            <div id="nominal-summary-container">
+                <p>Select filters and click "Generate Summary".</p>
+            </div>
+        </div>
+
     </div>
 
     <!-- Footer -->
     <div class="footer">
         🛡️ Designed by District SB Pathanamthitta | Ver 1.0 (Web Edition)
+    </div>
+
+    <!-- Action Log Modal -->
+    <div id="log-modal" class="modal">
+        <div class="modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 10px;">
+                <h3 style="margin:0;">📜 Action Log / Audit Trail</h3>
+                <button onclick="document.getElementById('log-modal').style.display='none'" class="stButton">Close</button>
+            </div>
+            <div id="log-container" style="max-height: 400px; overflow-y: auto;">
+                <!-- Logs populate here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Smart Excel Column Mapper Modal -->
+    <div id="mapper-modal" class="modal">
+        <div class="modal-content">
+            <h3 style="margin-top:0;">🔄 Smart Excel Column Mapper</h3>
+            <p>Your uploaded Nominal Roll doesn't exactly match the required headers. Please map the columns below:</p>
+            <table class="mapper-table" id="mapper-table-body">
+                <thead><tr><th>Required System Field</th><th>Select Matching Excel Column</th></tr></thead>
+                <tbody><!-- Mappers populate here --></tbody>
+            </table>
+            <div style="text-align: right;">
+                <button onclick="document.getElementById('mapper-modal').style.display='none'" class="stButton" style="background-color: #ef4444; color: white;">Cancel</button>
+                <button id="apply-mapping-btn" class="stButton" style="background-color: #10b981; color: white;">✅ Apply Mapping & Import</button>
+            </div>
+        </div>
     </div>
 
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
