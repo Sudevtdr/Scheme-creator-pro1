@@ -180,7 +180,12 @@
                 </div>
                 <button id="align-scheme-btn" class="stButton">🔄 Auto-Align Scheme</button>
                 <button id="sort-scheme-btn" class="stButton">↕️ Sort by Zone/Div</button>
+                <button id="add-one-row-btn" class="stButton">➕ Add 1 Row</button>
                 <button id="add-blank-rows-btn" class="stButton">➕ Add 10 Blank Rows</button>
+                <button id="insert-row-above-btn" class="stButton">⬆️ Insert Above</button>
+                <button id="insert-row-below-btn" class="stButton">⬇️ Insert Below</button>
+                <button id="delete-selected-btn" class="stButton" style="background-color: #fee2e2; border-color: #fecaca; color: #b91c1c;">🗑️ Delete Selected</button>
+                <button id="find-replace-btn" class="stButton">🔍 Find & Replace</button>
                 <button id="audit-scheme-btn" class="stButton">🚨 Audit Scheme</button>
                 <button id="undo-scheme-btn" class="stButton">↩️ Undo</button>
                 <button id="redo-scheme-btn" class="stButton">↪️ Redo</button>
@@ -203,9 +208,16 @@
                 <button id="duplicate-selected-btn" class="stButton">📑 Duplicate Rows</button>
                 <button id="fill-down-btn" class="stButton">⬇️ Fill Down</button>
             </div>
-            <div id="scheme-editor-container">
-                <!-- The data grid will be rendered here by JavaScript -->
-                <p>Loading scheme data...</p>
+            <div style="display: flex; gap: 15px; align-items: flex-start;">
+                <div id="scheme-tree-container" style="width: 250px; flex-shrink: 0; background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 15px; max-height: 600px; overflow-y: auto; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-top: 15px;">
+                    <!-- Tree view goes here -->
+                </div>
+                <div style="flex: 1; overflow: hidden;">
+                    <div id="scheme-editor-container">
+                        <!-- The data grid will be rendered here by JavaScript -->
+                        <p>Loading scheme data...</p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -247,6 +259,8 @@
                 <button id="clean-ranks-btn" class="stButton">✨ Clean & Find Ranks</button>
                 <button id="find-dupes-btn" class="stButton">🔍 Find Duplicates</button>
                 <span style="margin: 0 10px; border-left: 1px solid #ccc;"></span>
+                <button id="add-nom-row-btn" class="stButton">➕ Add 1 Row</button>
+                <button id="delete-nom-selected-btn" class="stButton" style="background-color: #fee2e2; border-color: #fecaca; color: #b91c1c;">🗑️ Delete Selected</button>
                 <button id="dl-nom-template-btn" class="stButton" style="background-color: #f3f4f6;">📄 Blank Template</button>
                 <button id="dl-nom-roll-btn" class="stButton" style="background-color: #e0f2fe; border-color: #bae6fd;">📥 Download Nominal Roll</button>
                 <button id="dl-nom-unassigned-btn" class="stButton" style="background-color: #fef08a; border-color: #fde047;">📥 Download Unassigned</button>
@@ -337,6 +351,32 @@
             </div>
             <div id="log-container" style="max-height: 400px; overflow-y: auto;">
                 <!-- Logs populate here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Find and Replace Modal -->
+    <div id="find-replace-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3 style="margin-top:0;">🔍 Advanced Find & Bulk Replace</h3>
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;">
+                <label><strong>Target Column:</strong>
+                    <select id="fr-column-select" style="padding: 6px; width: 100%; border-radius: 4px; border: 1px solid #ccc;"></select>
+                </label>
+                <label><strong>Find What:</strong>
+                    <input type="text" id="fr-find-input" style="padding: 6px; width: 100%; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc;">
+                </label>
+                <label><strong>Replace With:</strong>
+                    <input type="text" id="fr-replace-input" style="padding: 6px; width: 100%; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc;">
+                </label>
+                <div style="display: flex; gap: 15px; margin-top: 5px;">
+                    <label style="cursor: pointer;"><input type="checkbox" id="fr-match-case"> Match Case</label>
+                    <label style="cursor: pointer;"><input type="checkbox" id="fr-exact-match"> Exact Cell Match</label>
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <button onclick="document.getElementById('find-replace-modal').style.display='none'" class="stButton" style="background-color: #ef4444; color: white;">Cancel</button>
+                <button id="fr-execute-btn" class="stButton" style="background-color: #10b981; color: white;">✅ Replace All</button>
             </div>
         </div>
     </div>
