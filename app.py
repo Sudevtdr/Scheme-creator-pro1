@@ -7,6 +7,7 @@ import pandas as pd
 from flask import Flask, request, jsonify, render_template, send_file
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 
 # --- Initialize Flask App ---
 if getattr(sys, 'frozen', False):
@@ -91,7 +92,7 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
             if "🏢 ZONE:" in val0 or "STANDBY / RESERVE" in val0:
                 if z_data: chunks[current_z] = pd.DataFrame(z_data, columns=df.columns)
                 z_data = []
-                m = re.search(r'ZONE:\s*(.*?)\s*\|', val0)
+                m = re.search(r'ZONE:\s*(.*?)(?:\s*\||$)', val0)
                 current_z = m.group(1).strip() if m else "Reserve"
                 current_z = re.sub(r'[\\/*?:\[\]]', '', current_z)[:30]
             z_data.append(row)
@@ -138,7 +139,8 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
                         cell.border = thin_border
                 continue
 
-            if "🏢 ZONE:" in val0 or "STANDBY / RESERVE" in val0: tags.append('zone_header')
+            if "🏢 ZONE:" in val0: tags.append('zone_header')
+            elif "STANDBY / RESERVE" in val0: tags.append('reserve_header')
             elif "🛡️ DIV:" in val0: tags.append('div_header')
             elif "🎯 SEC:" in val0: tags.append('sec_header')
             elif "▼ DUTY POINTS" in val0: tags.append('point_header')
@@ -157,7 +159,7 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
             else: tags.append('point_row')
 
             fill_color, font_color, is_bold = None, "000000", False
-            if 'zone_header' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['z']), to_hex(theme_colors['zf']), True
+            if 'zone_header' in tags or 'reserve_header' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['z']), to_hex(theme_colors['zf']), True
             elif 'div_header' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['d']), to_hex(theme_colors['df']), True
             elif 'sec_header' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['s']), to_hex(theme_colors['sf']), True
             elif 'grand_total_row' in tags: fill_color, font_color, is_bold = to_hex(theme_colors['gt']), to_hex(get_contrasting_text(theme_colors['gt'])), True
@@ -216,9 +218,9 @@ def generate_styled_excel(df, source_tab, theme_colors, output_mode="full"):
                     ws.cell(row=current_row, column=merge_start).alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
         # Auto-adjust column widths
-        for column_cells in ws.columns:
+        for col_idx, column_cells in enumerate(ws.columns, 1):
             max_length = 0
-            column_letter = column_cells[0].column_letter
+            column_letter = get_column_letter(col_idx)
             for cell in column_cells:
                 try:
                     if cell.value:
@@ -242,7 +244,7 @@ def generate_html_report(df, title, source_tab, theme_colors):
     st_bg, st_fg = theme_colors['st'], get_contrasting_text(theme_colors['st'])
     
     html = f"<html><head><meta charset='utf-8'><title>{title}</title>"
-    html += f"<style>body {{ font-family: 'Segoe UI', sans-serif; margin: 20px; font-size: 12px; background-color: {p_bg}; color: {p_fg}; }} table {{ width: 100%; border-collapse: collapse; }} th, td {{ border: 1px solid #dddddd; padding: 6px; text-align: left; vertical-align: top; }} th {{ background-color: #f2f2f2; color: #000; }} .zone_header {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; }} .div_header {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; }} .sec_header {{ background-color: {s_bg} !important; color: {s_fg} !important; font-weight: bold; }} .point_header {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; text-decoration: underline; }} .deployed_point_header {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; }} .person_row {{ background-color: {p_bg} !important; color: {p_fg} !important; }} .main_heading_row {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; font-size: 16px; text-align: center; }} .date_heading_row {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; font-size: 14px; text-align: center; }} .conclusion_row {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; white-space: pre-wrap; }} @media print {{ tr td {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }} }}</style></head><body><h2>{title}</h2><table>"
+    html += f"<style>body {{ font-family: 'Segoe UI', sans-serif; margin: 20px; font-size: 12px; background-color: {p_bg}; color: {p_fg}; }} table {{ width: 100%; border-collapse: collapse; }} th, td {{ border: 1px solid #dddddd; padding: 6px; text-align: left; vertical-align: top; }} th {{ background-color: #f2f2f2; color: #000; }} .zone_header {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; }} .reserve_header {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; }} .div_header {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; }} .sec_header {{ background-color: {s_bg} !important; color: {s_fg} !important; font-weight: bold; }} .point_header {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; text-decoration: underline; }} .deployed_point_header {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; }} .person_row {{ background-color: {p_bg} !important; color: {p_fg} !important; }} .main_heading_row {{ background-color: {z_bg} !important; color: {z_fg} !important; font-weight: bold; font-size: 16px; text-align: center; }} .date_heading_row {{ background-color: {d_bg} !important; color: {d_fg} !important; font-weight: bold; font-size: 14px; text-align: center; }} .conclusion_row {{ background-color: {st_bg} !important; color: {st_fg} !important; font-weight: bold; white-space: pre-wrap; }} @media print {{ tr td {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }} }}</style></head><body><h2>{title}</h2><table>"
     
     columns = df.columns.tolist()
     if source_tab != "deployed":
@@ -254,7 +256,8 @@ def generate_html_report(df, title, source_tab, theme_colors):
     for _, row in df.iterrows():
         vals = row.tolist()
         val0 = str(vals[0])
-        if "🏢 ZONE" in val0 or "STANDBY" in val0: r_class = 'zone_header'
+        if "🏢 ZONE" in val0: r_class = 'zone_header'
+        elif "STANDBY / RESERVE" in val0: r_class = 'reserve_header'
         elif "🛡️ DIV" in val0: r_class = 'div_header'
         elif "🎯 SEC" in val0: r_class = 'sec_header'
         elif "▼ DUTY POINTS" in val0: r_class = 'point_header'
@@ -340,9 +343,9 @@ def to_excel(df):
                              top=Side(style='thin', color='BFBFBF'), 
                              bottom=Side(style='thin', color='BFBFBF'))
         # Auto-adjust column widths
-        for column_cells in ws.columns:
+        for col_idx, column_cells in enumerate(ws.columns, 1):
             max_length = 0
-            column_letter = column_cells[0].column_letter
+            column_letter = get_column_letter(col_idx)
             for cell in column_cells:
                 try:
                     if cell.value:
@@ -450,14 +453,13 @@ def build_readable_scheme_df(hierarchy, cmd_names, force_names, heading="", date
 
     def build_oic_str(fallbacks):
         for val, name in fallbacks:
-            if val and str(val) != "0": return f"({name.upper()}): {val}"
-        # Fallback strictly to SI/ASI with a 0 count if completely empty
-        return f"({fallbacks[-1][1].upper()}): 0"
+            if val and str(val) != "0": return f" | OFFICER IN CHARGE ({name.upper()}): {val}"
+        return ""
         
     for z, z_data in hierarchy.items():
         oic_z = build_oic_str([(z_data.get('sp'), cmd_names[0]), (z_data.get('dysp'), cmd_names[1]), (z_data.get('ip'), cmd_names[2]), (z_data.get('si'), force_names[0])])
         if z != "UNZONED":
-            hier_data.append([f"🏢 ZONE: {z.upper()} | OFFICER IN CHARGE {oic_z}", "", "", ""])
+            hier_data.append([f"🏢 ZONE: {z.upper()}{oic_z}", "", "", ""])
             total_sp += safe_int(z_data.get('sp'))
             total_dysp += safe_int(z_data.get('dysp'))
             total_ip += safe_int(z_data.get('ip'))
@@ -467,14 +469,14 @@ def build_readable_scheme_df(hierarchy, cmd_names, force_names, heading="", date
             
         for d, d_data in z_data['divs'].items():
             oic_d = build_oic_str([(d_data.get('dysp'), cmd_names[1]), (d_data.get('ip'), cmd_names[2]), (d_data.get('si'), force_names[0])])
-            hier_data.append([f"🛡️ DIV: {d.upper()} | OFFICER IN CHARGE {oic_d}", "", "", ""])
+            hier_data.append([f"🛡️ DIV: {d.upper()}{oic_d}", "", "", ""])
             total_dysp += safe_int(d_data.get('dysp'))
             total_ip += safe_int(d_data.get('ip'))
             zone_si += safe_int(d_data.get('si'))
             
             for s, s_data in d_data['secs'].items():
                 oic_s = build_oic_str([(s_data.get('ip'), cmd_names[2]), (s_data.get('si'), force_names[0])])
-                hier_data.append([f"🎯 SEC: {s.upper()} | OFFICER IN CHARGE {oic_s}", "", "", ""])
+                hier_data.append([f"🎯 SEC: {s.upper()}{oic_s}", "", "", ""])
                 total_ip += safe_int(s_data.get('ip'))
                 hier_data.append(["        ▼ DUTY POINTS", force_names[0].upper(), force_names[1].upper(), force_names[2].upper()])
                 point_counter = 1
@@ -494,12 +496,6 @@ def build_readable_scheme_df(hierarchy, cmd_names, force_names, heading="", date
     if hierarchy:
         grand_txt = f"🌟 GRAND SCHEME TOTAL (CMDRS: {cmd_names[0].upper()}:{total_sp} | {cmd_names[1].upper()}:{total_dysp} | {cmd_names[2].upper()}:{total_ip})"
         hier_data.append([grand_txt, str(grand_si), str(grand_cpo), str(grand_wcpo)])
-
-    # Post-process to hide empty commander rows as requested
-    empty_indicator = f"OFFICER IN CHARGE ({force_names[0].upper()}): 0"
-    for i in range(len(hier_data)):
-        if empty_indicator in str(hier_data[i][0]):
-            hier_data[i] = [""] * len(hier_data[i])
 
     return pd.DataFrame(hier_data, columns=["HIERARCHY / LOCATION"] + force_names)
 
@@ -571,7 +567,6 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", d
     for k in assignments: assignments[k].sort(key=lambda x: x['prio'])
 
     def format_cmdr_vertical(assigned_list):
-        if not assigned_list: return "(NOT ASSIGNED)"
         res = []
         for p in assigned_list:
             s = f"{p['name']} ({p['rank']})"
@@ -580,16 +575,27 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", d
             res.append(s)
         return " , ".join(res)
         
-    def get_dynamic_oic_label(assignments_list, fallbacks, hier_node):
+    def get_oic_suffix(assignments_list, fallbacks, hier_node):
         if assignments_list:
             ranks = []
             for p in assignments_list:
                 if p['rank'] not in ranks: ranks.append(p['rank'])
-            return f"({', '.join(ranks)})"
+            label = f"({', '.join(ranks)})"
+            return f" | OFFICER IN CHARGE {label}: {format_cmdr_vertical(assignments_list)}"
         
+        is_required = False
+        req_name = ""
         for key, name in fallbacks:
-            if hier_node.get(key): return f"({name.upper()})"
-        return f"({fallbacks[-1][1].upper()})"
+            val = hier_node.get(key)
+            if val and str(val) != "0":
+                is_required = True
+                req_name = name.upper()
+                break
+        
+        if is_required:
+            return f" | OFFICER IN CHARGE ({req_name}): (NOT ASSIGNED)"
+        else:
+            return ""
 
     unique_turns = set()
     for _, row in scheme_df.iterrows():
@@ -614,34 +620,37 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", d
 
     for z, z_data in hierarchy.items():
         bz, tz = parse_turn(z)
-        if bz not in matrix_struct: matrix_struct[bz] = {'cmdrs': {}, 'divs': {}}
+        if bz not in matrix_struct: matrix_struct[bz] = {'cmdrs': {}, 'divs': {}, 'req': False}
         
         if z != "UNZONED":
             sp_str = build_loc_str(z)
             sp_assigned = assignments.get(sp_str, [])
-            label = get_dynamic_oic_label(sp_assigned, [('sp', cmd_names[0]), ('dysp', cmd_names[1]), ('ip', cmd_names[2]), ('si', force_names[0])], z_data)
+            suffix = get_oic_suffix(sp_assigned, [('sp', cmd_names[0]), ('dysp', cmd_names[1]), ('ip', cmd_names[2]), ('si', force_names[0])], z_data)
             if sp_str in assignments: matrix_struct[bz]['cmdrs'][tz] = sp_assigned
-            dep_data.append([f"🏢 ZONE: {z.upper()} | OFFICER IN CHARGE {label}: {format_cmdr_vertical(sp_assigned)}", "", "", "", "", ""])
+            dep_data.append([f"🏢 ZONE: {z.upper()}{suffix}", "", "", "", "", ""])
+            if any(z_data.get(k) and str(z_data.get(k)) != "0" for k in ['sp', 'dysp', 'ip', 'si']): matrix_struct[bz]['req'] = True
             
         for d, d_data in z_data['divs'].items():
             bd, td = parse_turn(d)
-            if bd not in matrix_struct[bz]['divs']: matrix_struct[bz]['divs'][bd] = {'cmdrs': {}, 'secs': {}}
+            if bd not in matrix_struct[bz]['divs']: matrix_struct[bz]['divs'][bd] = {'cmdrs': {}, 'secs': {}, 'req': False}
             
             dysp_str = build_loc_str(z, d) if z != "UNZONED" else build_loc_str(d)
             dysp_assigned = assignments.get(dysp_str, [])
-            label = get_dynamic_oic_label(dysp_assigned, [('dysp', cmd_names[1]), ('ip', cmd_names[2]), ('si', force_names[0])], d_data)
+            suffix = get_oic_suffix(dysp_assigned, [('dysp', cmd_names[1]), ('ip', cmd_names[2]), ('si', force_names[0])], d_data)
             if dysp_str in assignments: matrix_struct[bz]['divs'][bd]['cmdrs'][td] = dysp_assigned
-            dep_data.append([f"🛡️ DIV: {d.upper()} | OFFICER IN CHARGE {label}: {format_cmdr_vertical(dysp_assigned)}", "", "", "", "", ""])
+            dep_data.append([f"🛡️ DIV: {d.upper()}{suffix}", "", "", "", "", ""])
+            if any(d_data.get(k) and str(d_data.get(k)) != "0" for k in ['dysp', 'ip', 'si']): matrix_struct[bz]['divs'][bd]['req'] = True
             
             for s, s_data in d_data['secs'].items():
                 bs, ts = parse_turn(s)
-                if bs not in matrix_struct[bz]['divs'][bd]['secs']: matrix_struct[bz]['divs'][bd]['secs'][bs] = {'cmdrs': {}, 'points': {}}
+                if bs not in matrix_struct[bz]['divs'][bd]['secs']: matrix_struct[bz]['divs'][bd]['secs'][bs] = {'cmdrs': {}, 'points': {}, 'req': False}
                 
                 ip_str = build_loc_str(z, d, s) if z != "UNZONED" else build_loc_str(d, s)
                 ip_assigned = assignments.get(ip_str, [])
-                label = get_dynamic_oic_label(ip_assigned, [('ip', cmd_names[2]), ('si', force_names[0])], s_data)
+                suffix = get_oic_suffix(ip_assigned, [('ip', cmd_names[2]), ('si', force_names[0])], s_data)
                 if ip_str in assignments: matrix_struct[bz]['divs'][bd]['secs'][bs]['cmdrs'][ts] = ip_assigned
-                dep_data.append([f"🎯 SEC: {s.upper()} | OFFICER IN CHARGE {label}: {format_cmdr_vertical(ip_assigned)}", "", "", "", "", ""])
+                dep_data.append([f"🎯 SEC: {s.upper()}{suffix}", "", "", "", "", ""])
+                if any(s_data.get(k) and str(s_data.get(k)) != "0" for k in ['ip', 'si']): matrix_struct[bz]['divs'][bd]['secs'][bs]['req'] = True
                 
                 point_counter = 1
                 for pt in s_data['points']:
@@ -671,16 +680,27 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", d
             dep_data.append([f"          {person_counter}. 👤 {person['name']}", person['rank'], person['gl'], person['pen'], person['unit'], person['mob']])
             person_counter += 1
 
-    def insert_matrix_block(name_prefix, data_dict):
+    def insert_matrix_block(name_prefix, data_dict, suffix=""):
+        full_name = f"{name_prefix}{suffix}" if data_dict or suffix else name_prefix
         if not data_dict:
-            matrix_data.append([name_prefix, "(NONE)"] + ["__MERGE__"]*(len(turn_list)-1))
+            if suffix:
+                matrix_data.append([full_name, "(NONE)"] + ["__MERGE__"]*(len(turn_list)-1))
+            else:
+                if "🚩" in name_prefix:
+                    matrix_data.append([name_prefix, "(NONE)"] + ["__MERGE__"]*(len(turn_list)-1))
+                else:
+                    matrix_data.append([name_prefix] + ["__MERGE__"]*len(turn_list))
             return
             
         has_specific_turns = any(k != 'GENERAL' for k in data_dict.keys())
-        max_p = max((len(lst) for lst in data_dict.values()), default=0)
+        
+        if has_specific_turns:
+            max_p = max((len(lst) for k, lst in data_dict.items() if k != 'GENERAL'), default=0)
+        else:
+            max_p = len(data_dict.get('GENERAL', []))
         
         for i in range(max_p):
-            row_vals = [name_prefix if i == 0 else ""]
+            row_vals = [full_name if i == 0 else ""]
             if not has_specific_turns and 'GENERAL' in data_dict:
                 if i < len(data_dict['GENERAL']):
                     row_vals.append(get_compressed_person(data_dict['GENERAL'][i]))
@@ -689,31 +709,28 @@ def build_deployed_data(scheme_df, nom_df, cmd_names, force_names, heading="", d
                     row_vals.extend([""] * len(turn_list))
             else:
                 for t in turn_list:
-                    if t in data_dict and i < len(data_dict[t]): row_vals.append(get_compressed_person(data_dict[t][i]))
-                    elif 'GENERAL' in data_dict and i < len(data_dict['GENERAL']): row_vals.append(get_compressed_person(data_dict['GENERAL'][i]))
-                    else: row_vals.append("")
+                    if t in data_dict and i < len(data_dict[t]):
+                        row_vals.append(get_compressed_person(data_dict[t][i]))
+                    else:
+                        row_vals.append("")
             matrix_data.append(row_vals)
 
     for bz, z_data in matrix_struct.items():
-        if bz != "UNZONED": insert_matrix_block(f"🏢 ZONE: {bz.upper()} | OFFICER IN CHARGE", z_data['cmdrs'])
+        if bz != "UNZONED": 
+            suffix = " | OFFICER IN CHARGE" if (z_data['req'] or z_data['cmdrs']) else ""
+            insert_matrix_block(f"🏢 ZONE: {bz.upper()}", z_data['cmdrs'], suffix)
+            
         for bd, d_data in z_data['divs'].items():
-            insert_matrix_block(f"🛡️ DIV: {bd.upper()} | OFFICER IN CHARGE", d_data['cmdrs'])
+            suffix = " | OFFICER IN CHARGE" if (d_data['req'] or d_data['cmdrs']) else ""
+            insert_matrix_block(f"🛡️ DIV: {bd.upper()}", d_data['cmdrs'], suffix)
+            
             for bs, s_data in d_data['secs'].items():
-                insert_matrix_block(f"🎯 SEC: {bs.upper()} | OFFICER IN CHARGE", s_data['cmdrs'])
+                suffix = " | OFFICER IN CHARGE" if (s_data['req'] or s_data['cmdrs']) else ""
+                insert_matrix_block(f"🎯 SEC: {bs.upper()}", s_data['cmdrs'], suffix)
                 pt_counter = 1
                 for bp, p_data in s_data['points'].items():
                     insert_matrix_block(f"    {int_to_roman(pt_counter)}. 🚩 {bp.upper()}", p_data)
                     pt_counter += 1
-
-    # Post-process to hide empty commander rows in deployment and matrix sheets
-    empty_indicator_dep = f"OFFICER IN CHARGE ({force_names[0].upper()}): (NOT ASSIGNED)"
-    for i in range(len(dep_data)):
-        if empty_indicator_dep in str(dep_data[i][0]):
-            dep_data[i] = [""] * len(dep_data[i])
-            
-    for i in range(len(matrix_data)):
-        if "OFFICER IN CHARGE" in str(matrix_data[i][0]) and len(matrix_data[i]) > 1 and "(NONE)" in str(matrix_data[i][1]):
-            matrix_data[i] = [""] * len(matrix_data[i])
             
     if conclusion:
         dep_data.append(["", "", "", "", "", ""])
@@ -930,25 +947,66 @@ def clone_rows():
     level = data.get('level', 'Point')
     labels = data.get('labels', ['Day', 'Night'])
     if not selected_indices or not labels: return jsonify(align_with_select(data, df).to_dict('records'))
-    min_idx, max_idx = min(selected_indices), max(selected_indices)
-    top_half = df.iloc[:min_idx]; bottom_half = df.iloc[max_idx+1:]; block = df.iloc[min_idx:max_idx+1]
+    
+    selected_indices = sorted(selected_indices)
     lvl_map = {"Zone": 0, "Division": 1, "Sector": 2, "Point": 3}
     c_lvl = lvl_map.get(level, 3)
-    new_blocks = []
-    for lbl in labels:
-        suffix = f" [{lbl}]"
-        new_block = block.copy()
-        for idx in new_block.index:
-            if idx in selected_indices:
-                if c_lvl <= 0 and str(new_block.at[idx, 'Zone']).strip(): new_block.at[idx, 'Zone'] = str(new_block.at[idx, 'Zone']).strip() + suffix
-                if c_lvl <= 1 and str(new_block.at[idx, 'Division']).strip(): new_block.at[idx, 'Division'] = str(new_block.at[idx, 'Division']).strip() + suffix
-                if c_lvl <= 2 and str(new_block.at[idx, 'Sector']).strip(): new_block.at[idx, 'Sector'] = str(new_block.at[idx, 'Sector']).strip() + suffix
-                if c_lvl <= 3:
-                    p_val = str(new_block.at[idx, 'Point']).strip()
-                    new_block.at[idx, 'Point'] = p_val + suffix if p_val else f"Point {suffix}"
-            new_block.at[idx, 'Select'] = False
-        new_blocks.append(new_block)
-    new_df = pd.concat([top_half] + new_blocks + [bottom_half], ignore_index=True)
+    
+    blocks = []
+    current_block = [selected_indices[0]]
+    for idx in selected_indices[1:]:
+        if idx == current_block[-1] + 1:
+            current_block.append(idx)
+        else:
+            blocks.append(current_block)
+            current_block = [idx]
+    blocks.append(current_block)
+
+    new_dfs = []
+    df_idx = 0
+    
+    for block in blocks:
+        if df_idx < block[0]:
+            unselected_before = df.iloc[df_idx:block[0]].copy()
+            unselected_before['Select'] = False
+            new_dfs.append(unselected_before)
+            
+        block_df = df.iloc[block[0]:block[-1]+1]
+        if level == "Point":
+            for idx in block_df.index:
+                for lbl in labels:
+                    suffix = f" [{lbl}]"
+                    new_row = block_df.loc[[idx]].copy()
+                    if c_lvl <= 0 and str(new_row.at[idx, 'Zone']).strip(): new_row.at[idx, 'Zone'] = str(new_row.at[idx, 'Zone']).strip() + suffix
+                    if c_lvl <= 1 and str(new_row.at[idx, 'Division']).strip(): new_row.at[idx, 'Division'] = str(new_row.at[idx, 'Division']).strip() + suffix
+                    if c_lvl <= 2 and str(new_row.at[idx, 'Sector']).strip(): new_row.at[idx, 'Sector'] = str(new_row.at[idx, 'Sector']).strip() + suffix
+                    if c_lvl <= 3:
+                        p_val = str(new_row.at[idx, 'Point']).strip()
+                        new_row.at[idx, 'Point'] = p_val + suffix if p_val else f"Point {suffix}"
+                    new_row.at[idx, 'Select'] = False
+                    new_dfs.append(new_row)
+        else:
+            for lbl in labels:
+                suffix = f" [{lbl}]"
+                new_block = block_df.copy()
+                for idx in new_block.index:
+                    if c_lvl <= 0 and str(new_block.at[idx, 'Zone']).strip(): new_block.at[idx, 'Zone'] = str(new_block.at[idx, 'Zone']).strip() + suffix
+                    if c_lvl <= 1 and str(new_block.at[idx, 'Division']).strip(): new_block.at[idx, 'Division'] = str(new_block.at[idx, 'Division']).strip() + suffix
+                    if c_lvl <= 2 and str(new_block.at[idx, 'Sector']).strip(): new_block.at[idx, 'Sector'] = str(new_block.at[idx, 'Sector']).strip() + suffix
+                    if c_lvl <= 3:
+                        p_val = str(new_block.at[idx, 'Point']).strip()
+                        new_block.at[idx, 'Point'] = p_val + suffix if p_val else f"Point {suffix}"
+                    new_block.at[idx, 'Select'] = False
+                new_dfs.append(new_block)
+            
+        df_idx = block[-1] + 1
+        
+    if df_idx < len(df):
+        unselected_after = df.iloc[df_idx:].copy()
+        unselected_after['Select'] = False
+        new_dfs.append(unselected_after)
+
+    new_df = pd.concat(new_dfs, ignore_index=True)
     return jsonify(align_with_select(data, new_df).to_dict('records'))
 
 @app.route('/api/group-rows', methods=['POST'])
@@ -1059,14 +1117,14 @@ def download_nom_template():
 
 @app.route('/api/download/nom-roll', methods=['POST'])
 def download_nom_roll():
-    df = pd.DataFrame(request.json['nom_data']).fillna("").drop(columns=["Assignment Type"], errors="ignore")
+    df = pd.DataFrame(request.json['nom_data']).fillna("").drop(columns=["Assignment Type", "Select", "_slot_idx"], errors="ignore")
     mask = df.astype(str).apply(lambda s: s.str.strip()).ne("").any(axis=1)
     return send_file(io.BytesIO(to_excel(df[mask])), download_name="Nominal_Roll.xlsx", as_attachment=True)
 
 @app.route('/api/download/nom-summary', methods=['POST'])
 def download_nom_summary():
     data = request.json
-    df = pd.DataFrame(data['nom_data']).fillna("").drop(columns=["Assignment Type"], errors="ignore")
+    df = pd.DataFrame(data['nom_data']).fillna("").drop(columns=["Assignment Type", "Select", "_slot_idx"], errors="ignore")
     mask = df.astype(str).apply(lambda s: s.str.strip()).ne("").any(axis=1)
     df = df[mask]
     
@@ -1150,9 +1208,9 @@ def download_nom_summary():
         
         # Auto-adjust column widths for both sheets
         for ws in [ws_sum, ws_data]:
-            for column_cells in ws.columns:
+            for col_idx, column_cells in enumerate(ws.columns, 1):
                 max_length = 0
-                column_letter = column_cells[0].column_letter
+                column_letter = get_column_letter(col_idx)
                 for cell in column_cells:
                     try:
                         if cell.value:
