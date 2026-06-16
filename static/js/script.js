@@ -7,6 +7,7 @@ const appState = {
     scheme_data: [],
     nom_data: [],
     theme: "Default Blue",
+    scheme_filter: { z: null, d: null, s: null },
     scheme_undo: [],
     scheme_redo: [],
     nom_undo: [],
@@ -134,9 +135,117 @@ function makeTableResizable(table) {
     });
 }
 
+function toggleTree(element) {
+    const nested = element.parentElement.querySelector(".tree-nested");
+    if(nested) nested.classList.toggle("tree-active");
+    element.classList.toggle("caret-down");
+}
+
+function filterSchemeTree(z, d, s) {
+    appState.scheme_filter = { z, d, s };
+    renderSchemeTable();
+}
+
+function renderSchemeTree() {
+    const container = document.getElementById('scheme-tree-container');
+    if (!container) return;
+
+    const hierarchy = { zones: {} };
+    let cz = "", cd = "", cs = "";
+    appState.scheme_data.forEach((row) => {
+        let z = (row.Zone || "").trim();
+        let d = (row.Division || "").trim();
+        let s = (row.Sector || "").trim();
+        
+        if (z) { cz = z; cd = ""; cs = ""; }
+        if (d) { cd = d; cs = ""; }
+        if (s) { cs = s; }
+        
+        let activeZ = cz || "UNZONED";
+        if (!hierarchy.zones[activeZ]) hierarchy.zones[activeZ] = { divs: {} };
+        
+        if (cd) {
+            if (!hierarchy.zones[activeZ].divs[cd]) hierarchy.zones[activeZ].divs[cd] = { secs: {} };
+            if (cs) {
+                if (!hierarchy.zones[activeZ].divs[cd].secs[cs]) hierarchy.zones[activeZ].divs[cd].secs[cs] = true;
+            }
+        }
+    });
+
+    let html = '<ul class="tree-ul root" style="list-style-type: none; padding: 0; margin: 0; font-size: 13px;">';
+    const isAllSelected = !appState.scheme_filter.z;
+    html += `<li><span class="tree-item ${isAllSelected ? 'selected' : ''}" onclick="filterSchemeTree(null, null, null)">🌍 All Scheme Data</span></li>`;
+    
+    Object.keys(hierarchy.zones).forEach(z => {
+        const zData = hierarchy.zones[z];
+        const hasDivs = Object.keys(zData.divs).length > 0;
+        const isZSelected = appState.scheme_filter.z === z && !appState.scheme_filter.d;
+        const zExpanded = appState.scheme_filter.z === z;
+        
+        html += `<li style="margin-top: 4px;">`;
+        if (hasDivs) html += `<span class="tree-caret ${zExpanded ? 'caret-down' : ''}" onclick="toggleTree(this)">▶</span>`;
+        else html += `<span style="width: 14px; display: inline-block;"></span>`;
+        
+        html += `<span class="tree-item ${isZSelected ? 'selected' : ''}" onclick="filterSchemeTree('${z.replace(/'/g, "\\'")}', null, null)">🏢 ${z}</span>`;
+        
+        if (hasDivs) {
+            html += `<ul class="tree-ul tree-nested ${zExpanded ? 'tree-active' : ''}" style="list-style-type: none; padding-left: 15px; margin: 0;">`;
+            Object.keys(zData.divs).forEach(d => {
+                const dData = zData.divs[d];
+                const hasSecs = Object.keys(dData.secs).length > 0;
+                const isDSelected = appState.scheme_filter.z === z && appState.scheme_filter.d === d && !appState.scheme_filter.s;
+                const dExpanded = zExpanded && appState.scheme_filter.d === d;
+                
+                html += `<li style="margin-top: 2px;">`;
+                if (hasSecs) html += `<span class="tree-caret ${dExpanded ? 'caret-down' : ''}" onclick="toggleTree(this)">▶</span>`;
+                else html += `<span style="width: 14px; display: inline-block;"></span>`;
+                
+                html += `<span class="tree-item ${isDSelected ? 'selected' : ''}" onclick="filterSchemeTree('${z.replace(/'/g, "\\'")}', '${d.replace(/'/g, "\\'")}', null)">🛡️ ${d}</span>`;
+                
+                if (hasSecs) {
+                    html += `<ul class="tree-ul tree-nested ${dExpanded ? 'tree-active' : ''}" style="list-style-type: none; padding-left: 15px; margin: 0;">`;
+                    Object.keys(dData.secs).forEach(s => {
+                        const isSSelected = appState.scheme_filter.z === z && appState.scheme_filter.d === d && appState.scheme_filter.s === s;
+                        html += `<li style="margin-top: 2px;"><span style="width: 14px; display: inline-block;"></span><span class="tree-item ${isSSelected ? 'selected' : ''}" onclick="filterSchemeTree('${z.replace(/'/g, "\\'")}', '${d.replace(/'/g, "\\'")}', '${s.replace(/'/g, "\\'")}')">🎯 ${s}</span></li>`;
+                    });
+                    html += `</ul>`;
+                }
+                html += `</li>`;
+            });
+            html += `</ul>`;
+        }
+        html += `</li>`;
+    });
+    html += '</ul>';
+
+    container.innerHTML = `<h4 style="margin-top: 0; margin-bottom: 10px; font-size: 14px; color: #334155; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">📍 Scheme Hierarchy</h4>${html}`;
+}
+
 function renderSchemeTable() {
     const container = document.getElementById('scheme-editor-container');
     if (!container) return;
+
+    let cz = "", cd = "", cs = "";
+    const visibleIndices = [];
+    if (!appState.scheme_filter) appState.scheme_filter = { z: null, d: null, s: null };
+
+    appState.scheme_data.forEach((row, idx) => {
+        let z = (row.Zone || "").trim();
+        let d = (row.Division || "").trim();
+        let s = (row.Sector || "").trim();
+        
+        if (z) { cz = z; cd = ""; cs = ""; }
+        if (d) { cd = d; cs = ""; }
+        if (s) { cs = s; }
+        
+        let activeZ = cz || "UNZONED";
+        let visible = true;
+        if (appState.scheme_filter.z && appState.scheme_filter.z !== activeZ) visible = false;
+        if (appState.scheme_filter.d && appState.scheme_filter.d !== cd) visible = false;
+        if (appState.scheme_filter.s && appState.scheme_filter.s !== cs) visible = false;
+        
+        if (visible) visibleIndices.push(idx);
+    });
 
     const headers = getSchemeHeaders();
     let table = '<div class="table-container"><table class="data-grid">';
@@ -148,7 +257,8 @@ function renderSchemeTable() {
 
     // Data Rows
     table += '<tbody>';
-    appState.scheme_data.forEach((row, index) => {
+    visibleIndices.forEach(index => {
+        const row = appState.scheme_data[index];
         table += '<tr>';
         const isChecked = row.Select ? 'checked' : '';
         table += `<td style="text-align: center;"><input type="checkbox" class="row-select-checkbox" data-row="${index}" ${isChecked}></td>`;
@@ -175,8 +285,11 @@ function renderSchemeTable() {
             const rowIndex = this.getAttribute('data-row');
             const colName = this.getAttribute('data-col');
             appState.scheme_data[rowIndex][colName] = this.innerText.trim();
+                if (['Zone', 'Division', 'Sector'].includes(colName)) renderSchemeTree();
         });
     });
+        
+    renderSchemeTree();
 }
 
 const THEME_COLORS = {
@@ -542,11 +655,11 @@ function renderNominalTable(containerId) {
     if (!appState.nom_filters) appState.nom_filters = {};
 
     const headers = ["Sl No", "Name", "Rank (Raw)", "GL Number", "PEN", "Unit", "Mobile", "Remarks", "Preferred Rank", "Duty Allocation"];
-    let table = '<div class="table-container"><table class="data-grid"><thead><tr>';
+    let table = '<div class="table-container"><table class="data-grid"><thead><tr><th>Select</th>';
     const allRanks = [...appState.cmd_names, ...appState.force_names];
 
     headers.forEach(h => table += `<th>${h}</th>`);
-    table += '</tr><tr class="filter-row">';
+    table += '</tr><tr class="filter-row"><th style="background: #f1f5f9;"></th>';
     
     headers.forEach(h => {
         const val = appState.nom_filters[h] || '';
@@ -573,6 +686,8 @@ function renderNominalTable(containerId) {
 
     filteredData.forEach(({ row, idx: index }) => {
         table += '<tr>';
+        const isChecked = row.Select ? 'checked' : '';
+        table += `<td style="text-align: center;"><input type="checkbox" class="nom-row-select-checkbox" data-row="${index}" ${isChecked}></td>`;
         headers.forEach(header => {
             if (header === 'Preferred Rank') {
                 const currentRank = row['Preferred Rank'] || '';
@@ -615,6 +730,12 @@ function renderNominalTable(containerId) {
         inp.addEventListener('input', function() {
             appState.nom_filters[this.getAttribute('data-col')] = this.value;
             renderNominalTable(containerId);
+        });
+    });
+
+    container.querySelectorAll('.nom-row-select-checkbox').forEach(chk => {
+        chk.addEventListener('change', function() {
+            appState.nom_data[this.getAttribute('data-row')].Select = this.checked;
         });
     });
 
@@ -1196,6 +1317,47 @@ function addBlankRows() {
     logAction("Added 10 blank scheme rows.");
 }
 
+function addOneRow() {
+    saveSchemeState();
+    const headers = getSchemeHeaders();
+    const row = { Select: false };
+    headers.forEach(h => row[h] = "");
+    appState.scheme_data.push(row);
+    renderSchemeTable();
+    logAction("Added 1 blank scheme row.");
+}
+
+function deleteSelectedRows() {
+    const selectedIndices = getSelectedIndices();
+    if (selectedIndices.length === 0) return alert("Select rows first by checking the boxes!");
+    if (!confirm(`Are you sure you want to delete ${selectedIndices.length} row(s)?`)) return;
+    
+    saveSchemeState();
+    appState.scheme_data = appState.scheme_data.filter((_, idx) => !selectedIndices.includes(idx));
+    renderSchemeTable();
+    logAction(`Deleted ${selectedIndices.length} scheme rows.`);
+}
+
+function insertRow(above) {
+    const selectedIndices = getSelectedIndices();
+    if (selectedIndices.length !== 1) return alert("Please select exactly ONE row to insert relative to!");
+    
+    saveSchemeState();
+    const targetIdx = selectedIndices[0];
+    const headers = getSchemeHeaders();
+    const row = { Select: false };
+    headers.forEach(h => row[h] = "");
+    
+    const insertIdx = above ? targetIdx : targetIdx + 1;
+    appState.scheme_data.splice(insertIdx, 0, row);
+    
+    // Clear selection
+    appState.scheme_data.forEach(r => r.Select = false);
+    
+    renderSchemeTable();
+    logAction(`Inserted 1 row ${above ? 'above' : 'below'} row ${targetIdx + 1}.`);
+}
+
 function auditScheme() {
     let errors = [];
     appState.scheme_data.forEach((row, idx) => {
@@ -1346,6 +1508,30 @@ async function postNomAction(endpoint) {
     } catch (error) { alert("Error: Could not complete action."); undoNom(); }
 }
 
+function getNomSelectedIndices() { return appState.nom_data.map((row, idx) => row.Select ? idx : -1).filter(idx => idx !== -1); }
+
+function deleteNominalSelectedRows() {
+    const selectedIndices = getNomSelectedIndices();
+    if (selectedIndices.length === 0) return alert("Select rows first by checking the boxes!");
+    if (!confirm(`Are you sure you want to delete ${selectedIndices.length} row(s)?`)) return;
+    
+    saveNomState();
+    appState.nom_data = appState.nom_data.filter((_, idx) => !selectedIndices.includes(idx));
+    updateNominalViews();
+    logAction(`Deleted ${selectedIndices.length} nominal roll rows.`);
+}
+
+function addNominalRow() {
+    saveNomState();
+    const headers = ["Sl No", "Name", "Rank (Raw)", "GL Number", "PEN", "Unit", "Mobile", "Remarks", "Preferred Rank", "Duty Allocation", "Assignment Type"];
+    const row = { Select: false };
+    headers.forEach(h => row[h] = "");
+    if (!appState.nom_data) appState.nom_data = [];
+    appState.nom_data.push(row);
+    updateNominalViews();
+    logAction("Added 1 blank nominal roll row.");
+}
+
 function cleanRanks() { postNomAction('/api/clean-ranks'); logAction("Cleaned and assigned preferred ranks."); }
 function autoAllocate() { postNomAction('/api/auto-allocate'); logAction("Executed strict Auto-Allocation."); }
 function qrtSweep() { postNomAction('/api/qrt-sweep'); logAction("Swept unassigned personnel to Standby/Reserve."); }
@@ -1408,6 +1594,10 @@ document.addEventListener('DOMContentLoaded', () => {
     bindIfExists('get-deployed-btn', 'click', getDeployedData);
     bindIfExists('sort-scheme-btn', 'click', sortScheme);
     bindIfExists('add-blank-rows-btn', 'click', addBlankRows);
+    bindIfExists('add-one-row-btn', 'click', addOneRow);
+    bindIfExists('delete-selected-btn', 'click', deleteSelectedRows);
+    bindIfExists('insert-row-above-btn', 'click', () => insertRow(true));
+    bindIfExists('insert-row-below-btn', 'click', () => insertRow(false));
     bindIfExists('audit-scheme-btn', 'click', auditScheme);
     bindIfExists('undo-scheme-btn', 'click', undoScheme);
     bindIfExists('redo-scheme-btn', 'click', redoScheme);
@@ -1423,6 +1613,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadNomInput = document.getElementById('upload-nom-input');
     if (uploadNomInput) uploadNomInput.addEventListener('change', function() { uploadNominalExcel(this); });
 
+    bindIfExists('add-nom-row-btn', 'click', addNominalRow);
+    bindIfExists('delete-nom-selected-btn', 'click', deleteNominalSelectedRows);
     bindIfExists('clean-ranks-btn', 'click', cleanRanks);
     bindIfExists('find-dupes-btn', 'click', findDuplicates);
     bindIfExists('auto-allocate-btn', 'click', autoAllocate);
@@ -1515,6 +1707,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 appState.force_names = loaded.force_names || ["SI/ASI", "SCPO/CPO", "WSCPO/WCPO"];
                 appState.scheme_data = loaded.scheme_data || [];
                 appState.nom_data = loaded.nom_data || [];
+                appState.scheme_filter = loaded.scheme_filter || { z: null, d: null, s: null };
                 appState.theme = loaded.theme || "Default Blue";
                 if (loaded.custom_theme) appState.custom_theme = loaded.custom_theme;
                 if (loaded.logs) appState.logs = loaded.logs;
